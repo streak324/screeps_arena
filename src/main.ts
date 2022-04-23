@@ -1,4 +1,16 @@
-import { utils, prototypes, constants, visual } from "game";
+//TODO: cluster enemy creeps together. ideas: put creeps in a bvh tree, using movement speed and attack/heal range to measure sphere of influence. 
+//TODO: assess the strength of the enemy cluster.
+//TODO: assess attack priority of creeps in enemy cluster.
+//TODO: form creep squadrons.
+//TODO: attack/defend against enemy clusters if stronger
+//TODO: implement squadron retreats if being attacked by stronger enemy clusuter.
+//TODO: implement healer logic into squadron
+//TODO: implement rangers with basic kiting
+//TODO: implement ramparts for use by squadrons
+//TODO: haul midfield containers
+//TODO: optimize pathfanding
+
+import { utils, prototypes, constants, visual, arenaInfo } from "game";
 import { getCpuTime } from "game/utils";
 
 type State = {
@@ -10,7 +22,9 @@ type State = {
 	haulers: Array<prototypes.Creep>,
 	newAttackers: Array<prototypes.Creep>,
 	attackers: Array<prototypes.Creep>,
-	cpuViz: visual.Visual
+	cpuViz: visual.Visual,
+	maxWallTimeMS: number,
+	maxWallTimeTick: number,
 };
 
 var state: State = {
@@ -23,6 +37,8 @@ var state: State = {
 	cpuViz: new visual.Visual(2, true),
 	newAttackers: new Array(),
 	attackers: new Array(),
+	maxWallTimeMS: 0.0,
+	maxWallTimeTick: 1,
 };
 
 export function loop(): void {
@@ -167,8 +183,6 @@ export function loop(): void {
 			return;
 		}
 
-		console.log(target);
-
 		let s = moveToAndAttack(creep, target);
 		if (s !== constants.OK) {
 			console.log("unable to to attack target", target.id);
@@ -177,10 +191,40 @@ export function loop(): void {
 
 	if (state.debug) {
 		let style: TextStyle = {
-			font: "12px",
+			font: 8.0,
 			color: "#800080",
 		}
-		state.cpuViz.clear().text("CPU Wall Time us:" + utils.getCpuTime()/1000, mySpawn);
+
+		let wallTimeMS = utils.getCpuTime()/1_000_000;
+		if (state.maxWallTimeMS < wallTimeMS) {
+			state.maxWallTimeMS = wallTimeMS;
+			state.maxWallTimeTick = utils.getTicks();
+		}
+
+		let pos1: prototypes.RoomPosition = {
+			x: mySpawn.x,
+			y: mySpawn.y,
+		};
+		let pos2: prototypes.RoomPosition = {
+			x: mySpawn.x,
+			y: mySpawn.y + 4.0,
+		};
+		let pos3: prototypes.RoomPosition = {
+			x: mySpawn.x,
+			y: mySpawn.y + 8.0,
+		};
+		let pos4: prototypes.RoomPosition = {
+			x: mySpawn.x,
+			y: mySpawn.y + 12.0,
+		};
+
+arenaInfo.cpuTimeLimitFirstTick
+
+		state.cpuViz.clear();
+		state.cpuViz.text("Tick Wall Time ms:" + wallTimeMS, pos1);
+		state.cpuViz.text("Max Tick Wall Time (ms:" + state.maxWallTimeMS + ", tick: " + state.maxWallTimeTick + ")", pos2 );
+		state.cpuViz.text("First Tick Alloc Time ms:" + arenaInfo.cpuTimeLimitFirstTick/1_000_000, pos3);
+		state.cpuViz.text("Tick Alloc Time ms:" + arenaInfo.cpuTimeLimitFirstTick/1_000_000, pos4);
 	}
 }
 
