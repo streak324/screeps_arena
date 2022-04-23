@@ -1,9 +1,10 @@
-//TODO: cluster enemy creeps together. ideas: put creeps in a bvh tree, using movement speed and attack/heal range to measure sphere of influence. 
-//TODO: assess the strength of the enemy cluster.
-//TODO: assess attack priority of creeps in enemy cluster.
+//TODO: form a cluster hierarchy of enemy creeps. ideas: put creeps in an quad tree. clusters in the bottom of the hierarchy should have a tile range equal to max creep attack range
+//TODO: calculate strength of each enemy cluster.
+//TODO: determine attack priority of creeps in enemy cluster.
 //TODO: form creep squadrons.
-//TODO: attack/defend against enemy clusters if stronger
-//TODO: implement squadron retreats if being attacked by stronger enemy clusuter.
+//TODO: compare logistical/terrain advantage b/w squadrons and enemy clusters
+//TODO: engage squadradons against enemy clusters if stronger
+//TODO: retreat squadrons from stronger enemy clusters.
 //TODO: implement healer logic into squadron
 //TODO: implement rangers with basic kiting
 //TODO: implement ramparts for use by squadrons
@@ -11,7 +12,19 @@
 //TODO: optimize pathfanding
 
 import { utils, prototypes, constants, visual, arenaInfo } from "game";
+import { RoomPosition } from "game/prototypes";
 import { getCpuTime } from "game/utils";
+
+//its bounds will be represented by an axis aligned bounded box
+interface UnitCluster extends prototypes.RoomPosition {
+	id: number,
+	power: number,
+	units: Array<UnitCluster|prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart>,
+	range: number,
+}
+
+//the squared value of the max tiles that an archer can reach
+const MIN_CLUSTER_RANGE = 3;
 
 type State = {
 	debug: boolean,
@@ -165,6 +178,97 @@ export function loop(): void {
 		state.newAttackers.push(creep);
 	}
 
+
+	//clustering enemies
+	let enemyClusters = new Array<UnitCluster>();
+	let enemies = new Array<prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart>(...enemyCreeps, ...enemyRamparts, ...enemyTowers,);
+	let enemyLabelViz = new visual.Visual(2, false);
+	enemies.forEach(e => {
+		if (state.debug) {
+			let style: TextStyle = {
+				font: 0.7,
+				color: "#0000ff",
+			}
+			enemyLabelViz.text("e" + e.id, e, style);
+		}
+		let unitPower = 0;
+		if (e instanceof prototypes.Creep) {
+			let rangePartCnt = 0;
+			let attackPartCnt = 0;
+			let healPartCnt = 0;
+			let movePartCnt = 0;
+			e.body.forEach(p => {
+				switch (p.type) {
+					case constants.ATTACK:
+						attackPartCnt++;
+					case constants.RANGED_ATTACK:
+						rangePartCnt++;
+					case constants.HEAL:
+						healPartCnt++;
+				};
+			})
+			unitPower = 3*attackPartCnt + rangePartCnt * movePartCnt + healPartCnt * movePartCnt;
+		} else if (e instanceof prototypes.StructureRampart) {
+			unitPower = 20;
+		} else if (e instanceof prototypes.StructureTower) {
+			unitPower = 20;
+		}
+
+		let cluster = enemyClusters.find(cluster => {
+			let dx = cluster.x - e.x;  
+			let dy = cluster.y - e.y;
+			if (dx * dx <= cluster.range*cluster.range && dy * dy <= cluster.range*cluster.range) {
+				return cluster;
+			}
+		});
+
+		if (cluster === undefined) {
+			let newCluster: UnitCluster = {
+				id: enemyClusters.length,
+				x: e.x,
+				y: e.y,
+				power: unitPower,
+				units: new Array(e),
+				range: MIN_CLUSTER_RANGE,
+			}
+			enemyClusters.push(newCluster);
+		} else {
+			cluster.power = unitPower;
+			cluster.units.push(e);
+		}
+	});
+
+	if (state.debug) {
+		enemyClusters.forEach(cluster => {
+			let topleft: prototypes.RoomPosition = {
+				x: cluster.x-cluster.range-0.5,
+				y: cluster.y-cluster.range-0.5,
+			}
+			let style: PolyStyle = {
+				fill: "#ff0000",
+				lineStyle: "solid",
+			}
+			enemyLabelViz.rect(topleft, 2*cluster.range+1, 2*cluster.range+1, style);
+
+			let textStyle: TextStyle = {
+				font: 0.7,
+				color: "#ffffff",
+				backgroundColor: "#80808080",
+			}
+			let text = "EC" + cluster.id + ": ";
+			cluster.units.forEach(e => {
+				text += e.id + ", ";
+			});
+			text +="\nPower: " + cluster.power;
+			let centerTop: prototypes.RoomPosition = {
+				x: cluster.x,
+				y: cluster.y-cluster.range+1,
+			} 
+			enemyLabelViz.text(text, centerTop, textStyle);
+		});
+	}
+
+	//running logic for individual attack units
 	state.attackers.forEach(creep => {
 		let target: prototypes.Creep | prototypes.Structure | undefined;
 		let e = creep.findClosestByRange(enemyCreeps);
@@ -185,7 +289,7 @@ export function loop(): void {
 
 		let s = moveToAndAttack(creep, target);
 		if (s !== constants.OK) {
-			console.log("unable to to attack target", target.id);
+			console.log("attack status on target", target.id, ":", s);
 		}
 	});
 
@@ -217,8 +321,6 @@ export function loop(): void {
 			x: mySpawn.x,
 			y: mySpawn.y + 12.0,
 		};
-
-arenaInfo.cpuTimeLimitFirstTick
 
 		state.cpuViz.clear();
 		state.cpuViz.text("Tick Wall Time ms:" + wallTimeMS, pos1);
