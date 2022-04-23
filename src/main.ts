@@ -19,7 +19,7 @@ import { getCpuTime } from "game/utils";
 interface UnitCluster extends prototypes.RoomPosition {
 	id: number,
 	power: number,
-	units: Array<UnitCluster|prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart>,
+	units: Array<UnitCluster|prototypes.StructureSpawn|prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart>,
 	range: number,
 }
 
@@ -181,7 +181,7 @@ export function loop(): void {
 
 	//clustering enemies
 	let enemyClusters = new Array<UnitCluster>();
-	let enemies = new Array<prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart>(...enemyCreeps, ...enemyRamparts, ...enemyTowers,);
+	let enemies = new Array<prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart|prototypes.StructureSpawn>(...enemySpawns, ...enemyCreeps, ...enemyRamparts, ...enemyTowers,);
 	let enemyLabelViz = new visual.Visual(2, false);
 	enemies.forEach(e => {
 		if (state.debug) {
@@ -212,6 +212,12 @@ export function loop(): void {
 			unitPower = 20;
 		} else if (e instanceof prototypes.StructureTower) {
 			unitPower = 20;
+		} else if (e instanceof prototypes.StructureSpawn) {
+			let cap = e.store.getCapacity(constants.RESOURCE_ENERGY);
+			let usedCap = e.store.getUsedCapacity(constants.RESOURCE_ENERGY);
+			if (cap != undefined && usedCap != undefined) {
+				unitPower = 30*usedCap/cap;
+			}
 		}
 
 		let cluster = enemyClusters.find(cluster => {
