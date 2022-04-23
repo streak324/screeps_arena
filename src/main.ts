@@ -33,7 +33,10 @@ export function loop(): void {
 	}
 	let mySpawn = mySpawns[0];
 
-	let enemySpawns = utils.getObjectsByPrototype(prototypes.StructureSpawn).filter(spawn => !spawn.my);
+	let enemySpawns = utils.getObjectsByPrototype(prototypes.StructureSpawn).filter(i => !i.my);
+	let enemyRamparts = utils.getObjectsByPrototype(prototypes.StructureRampart).filter(i => !i.my);
+	let enemyTowers = utils.getObjectsByPrototype(prototypes.StructureTower).filter(i => !i.my);
+	let walls = utils.getObjectsByPrototype(prototypes.StructureWall)
 	let enemyCreeps = utils.getObjectsByPrototype(prototypes.Creep).filter(creep => !creep.my);
 
 	while (state.newHaulers.length > 0) {
@@ -46,7 +49,6 @@ export function loop(): void {
 	while (state.newAttackers.length > 0) {
 		let creep = state.newAttackers.pop();
 		if (creep !== undefined && creep.exists) {
-			console.log("new attacker creep", creep)
 			state.attackers.push(creep);
 		}
 	}
@@ -61,7 +63,6 @@ export function loop(): void {
 	let starterContainers = utils.getObjectsByPrototype(prototypes.StructureContainer).filter(container => mySpawn.getRangeTo(container) < 5);
 	state.haulers.forEach((creep, idx) => {
 		if (creep.exists === false) {
-			console.log(creep);
 			state.haulers[idx] = state.haulers[state.haulers.length-1];
 			state.haulers.pop();
 			let container = state.haulerToContainer.get(creep.id);
@@ -143,15 +144,34 @@ export function loop(): void {
 		}
 	});
 	
-	let creep = mySpawn.spawnCreep([constants.ATTACK, constants.ATTACK, constants.MOVE, constants.MOVE, constants.MOVE]).object;
+	let creep = mySpawn.spawnCreep([constants.MOVE, constants.ATTACK, constants.ATTACK, constants.MOVE, constants.MOVE]).object;
 	if (creep !== undefined) {
 		state.newAttackers.push(creep);
 	}
 
 	state.attackers.forEach(creep => {
-		let s = creep.attack(enemySpawns[0])
-		if (s === constants.ERR_NOT_IN_RANGE) {
-			creep.moveTo(enemySpawns[0]);
+		let target: prototypes.Creep | prototypes.Structure | undefined;
+		let e = creep.findClosestByRange(enemyCreeps);
+		if (e != undefined && utils.getRange(creep, e) < 5 && e.hits > 0 && utils.getRange(e, enemySpawns[0]) > 0.5) {
+			target = e;
+		} else {
+			let er = creep.findClosestByRange(enemyRamparts);
+			if (er != undefined) {
+				target = er;
+			} else {
+				target = enemySpawns[0];
+			}
+		}
+
+		if (target === undefined) {
+			return;
+		}
+
+		console.log(target);
+
+		let s = moveToAndAttack(creep, target);
+		if (s !== constants.OK) {
+			console.log("unable to to attack target", target.id);
 		}
 	});
 
@@ -162,4 +182,13 @@ export function loop(): void {
 		}
 		state.cpuViz.clear().text("CPU Wall Time us:" + utils.getCpuTime()/1000, mySpawn);
 	}
+}
+
+function moveToAndAttack(creep: prototypes.Creep, target: prototypes.Creep | prototypes.Structure): constants.CreepActionReturnCode | constants.CreepMoveReturnCode | constants.ERR_NO_PATH | constants.ERR_INVALID_TARGET | undefined {
+	let s = creep.attack(target)
+	if (s === constants.ERR_NOT_IN_RANGE) {
+		return creep.moveTo(target);
+	}
+	return s;
+
 }
