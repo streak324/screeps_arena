@@ -233,7 +233,7 @@ export function loop(): void {
 			}
 			enemyClusters.push(newCluster);
 		} else {
-			cluster.power = unitPower;
+			cluster.power += unitPower;
 			cluster.units.push(e);
 		}
 	});
