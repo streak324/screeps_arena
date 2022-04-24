@@ -259,7 +259,7 @@ export function loop(): void {
 		}
 	});
 
-	let midfieldContainers = utils.getObjectsByPrototype(prototypes.StructureContainer).filter(i => (i.x > 18 && i.x < 82 && i.y > 20 && i.y < 80) && (i.ticksToDecay === undefined || i.ticksToDecay > 50));
+	let midfieldContainers = utils.getObjectsByPrototype(prototypes.StructureContainer).filter(i => (i.x > 18 && i.x < 82 && i.y > 20 && i.y < 80));
 	let resources = utils.getObjectsByPrototype(prototypes.Resource);
 	let myExtensions = utils.getObjectsByPrototype(prototypes.StructureExtension).filter(i => i.my);
 	state.midfieldWorkers.forEach((creep, idx) => {
@@ -362,7 +362,12 @@ export function loop(): void {
 					return;
 				}
 
-				bestDist = dist;
+				let ticksToDecay: number = 1000;
+				if (creep.ticksToDecay != undefined) {
+					ticksToDecay = creep.ticksToDecay;
+				}
+
+				bestDist = dist / ticksToDecay;
 				bestContainer = container;
 			});
 			if (bestContainer === undefined) {
