@@ -17,9 +17,9 @@ interface UnitCluster {
 	id: number,
 	power: number,
 	units: Array<UnitCluster|prototypes.StructureSpawn|prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart>,
-	range: number,
 	min: prototypes.RoomPosition,
 	max: prototypes.RoomPosition,
+	mass: number,
 }
 
 //the squared value of the max tiles that an archer can reach
@@ -191,6 +191,7 @@ export function loop(): void {
 			enemyLabelViz.text("e" + e.id, e, style);
 		}
 		let unitPower = 0;
+		let mass = 1;
 		if (e instanceof prototypes.Creep) {
 			let rangePartCnt = 0;
 			let attackPartCnt = 0;
@@ -200,28 +201,40 @@ export function loop(): void {
 				switch (p.type) {
 					case constants.ATTACK:
 						attackPartCnt++;
+					break;
 					case constants.RANGED_ATTACK:
 						rangePartCnt++;
+						mass += 1;
+					break;
 					case constants.HEAL:
 						healPartCnt++;
+						mass += 1;
+					break;
+					case constants.MOVE:
+						mass += 1;
+					break;
 				};
-			})
+			});
 			unitPower = 3*attackPartCnt + rangePartCnt * movePartCnt + healPartCnt * movePartCnt;
 		} else if (e instanceof prototypes.StructureRampart) {
 			unitPower = 20;
 		} else if (e instanceof prototypes.StructureTower) {
 			unitPower = 20;
+			mass = 4;
 		} else if (e instanceof prototypes.StructureSpawn) {
 			let cap = e.store.getCapacity(constants.RESOURCE_ENERGY);
 			let usedCap = e.store.getUsedCapacity(constants.RESOURCE_ENERGY);
 			if (cap != undefined && usedCap != undefined) {
 				unitPower = 30*usedCap/cap;
 			}
+			mass = 2;
 		}
 
-		const MIN_UNIT_DENSITY = 0.2;
+		const MIN_UNIT_DENSITY = 0.8;
 
-		let cluster = enemyClusters.find(cluster => {
+		let bestCluster: UnitCluster | undefined;
+		let highestDensity = 0.0;
+		enemyClusters.forEach(cluster => {
 			if (e.x >= cluster.min.x-MIN_CLUSTER_RANGE && e.x <= cluster.max.x + MIN_CLUSTER_RANGE && e.y >= cluster.min.y-MIN_CLUSTER_RANGE && e.y <= cluster.max.y + MIN_CLUSTER_RANGE) {
 				let newMax: prototypes.RoomPosition = {
 					x: Math.max(e.x, cluster.max.x),
@@ -233,19 +246,16 @@ export function loop(): void {
 				};
 
 				let newArea = (newMax.x - newMin.x + 1) * (newMax.y - newMin.y + 1);
+				let newMass = cluster.mass + mass;
 
-				let density  = (cluster.units.length + 1) / newArea;
-				if (newArea == 0 || density > MIN_UNIT_DENSITY) {
-					cluster.max = newMax;
-					cluster.min = newMin;
-					cluster.power += unitPower;
-					cluster.units.push(e);
-					return cluster;
+				let density  = newMass / newArea;
+				if (density > MIN_UNIT_DENSITY && highestDensity < density) {
+					bestCluster = cluster; 
 				}
 			}
 		});
 
-		if (cluster === undefined) {
+		if (bestCluster === undefined) {
 			let newCluster: UnitCluster = {
 				id: enemyClusters.length,
 				min: {
@@ -258,9 +268,24 @@ export function loop(): void {
 				},
 				power: unitPower,
 				units: new Array(e),
-				range: MIN_CLUSTER_RANGE,
+				mass: mass,
 			}
 			enemyClusters.push(newCluster);
+		} else {
+			let newMax: prototypes.RoomPosition = {
+				x: Math.max(e.x, bestCluster.max.x),
+				y: Math.max(e.y, bestCluster.max.y),
+			};
+			let newMin: prototypes.RoomPosition = {
+				x: Math.min(e.x, bestCluster.min.x),
+				y: Math.min(e.y, bestCluster.min.y),
+			};
+			bestCluster.max = newMax;
+			bestCluster.min = newMin;
+			bestCluster.power += unitPower;
+			bestCluster.mass += mass;
+			bestCluster.units.push(e);
+			return bestCluster;
 		}
 	});
 
@@ -297,6 +322,7 @@ export function loop(): void {
 			});
 			text +="\nPower: " + cluster.power;
 			text += "\nArea: " + (cluster.max.x - cluster.min.x + 1) * (cluster.max.y - cluster.min.y + 1); 
+			text += "\nMass: " + cluster.mass; 
 			let centerTop: prototypes.RoomPosition = {
 				x: cluster.min.x + (cluster.max.x - cluster.min.x) / 2,
 				y: cluster.min.y-1,
