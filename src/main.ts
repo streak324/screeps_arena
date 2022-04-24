@@ -326,6 +326,10 @@ export function loop(): void {
 					if (status === constants.ERR_NOT_IN_RANGE) {
 						state.assignedConstructions.delete(creep.id);
 					}
+				} else {
+					nearbyExtensions.forEach(i => {
+						creep.transfer(i, constants.RESOURCE_ENERGY);
+					});
 				}
 			} else if (energyOnTheGround && resource != undefined) {
 				console.log("picking up energy");
