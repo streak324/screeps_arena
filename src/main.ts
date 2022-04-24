@@ -330,6 +330,7 @@ export function loop(): void {
 					nearbyExtensions.forEach(i => {
 						creep.transfer(i, constants.RESOURCE_ENERGY);
 					});
+					creep.drop(constants.RESOURCE_ENERGY);
 				}
 			} else if (energyOnTheGround && resource != undefined) {
 				console.log("picking up energy");
