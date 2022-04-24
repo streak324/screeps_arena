@@ -169,11 +169,10 @@ export function loop(): void {
 			state.newMidfieldWorkers.push(creep);
 		}
 	} else {
-		//TODO: uncomment when done testing out the midfield worker code
-		//let creep = mySpawn.spawnCreep([constants.MOVE, constants.ATTACK, constants.MOVE, constants.MOVE, constants.ATTACK, constants.ATTACK]).object;
-		//if (creep !== undefined) {
-		//	state.newAttackers.push(creep);
-		//}
+		let creep = mySpawn.spawnCreep([constants.MOVE, constants.ATTACK, constants.MOVE, constants.MOVE, constants.ATTACK, constants.ATTACK]).object;
+		if (creep !== undefined) {
+			state.newAttackers.push(creep);
+		}
 	}
 
 	state.haulers.forEach((creep, idx) => {
