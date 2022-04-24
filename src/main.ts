@@ -1,9 +1,8 @@
 //TODO: form a cluster hierarchy of enemy creeps. ideas: put creeps in an quad tree. clusters in the bottom of the hierarchy should have a tile range equal to max creep attack range
-//TODO: calculate strength of each enemy cluster.
-//TODO: determine attack priority of creeps in enemy cluster.
 //TODO: form creep squadrons.
 //TODO: compare logistical/terrain advantage b/w squadrons and enemy clusters
 //TODO: engage squadradons against enemy clusters if stronger
+//TODO: determine attack priority of individuals in enemy cluster.
 //TODO: retreat squadrons from stronger enemy clusters.
 //TODO: implement healer logic into squadron
 //TODO: implement rangers with basic kiting
@@ -12,15 +11,15 @@
 //TODO: optimize pathfanding
 
 import { utils, prototypes, constants, visual, arenaInfo } from "game";
-import { RoomPosition } from "game/prototypes";
-import { getCpuTime } from "game/utils";
 
 //its bounds will be represented by an axis aligned bounded box
-interface UnitCluster extends prototypes.RoomPosition {
+interface UnitCluster {
 	id: number,
 	power: number,
 	units: Array<UnitCluster|prototypes.StructureSpawn|prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart>,
 	range: number,
+	min: prototypes.RoomPosition,
+	max: prototypes.RoomPosition,
 }
 
 //the squared value of the max tiles that an archer can reach
@@ -220,41 +219,72 @@ export function loop(): void {
 			}
 		}
 
+		const MIN_UNIT_DENSITY = 0.2;
+
 		let cluster = enemyClusters.find(cluster => {
-			let dx = cluster.x - e.x;  
-			let dy = cluster.y - e.y;
-			if (dx * dx <= cluster.range*cluster.range && dy * dy <= cluster.range*cluster.range) {
-				return cluster;
+			if (e.x >= cluster.min.x-MIN_CLUSTER_RANGE && e.x <= cluster.max.x + MIN_CLUSTER_RANGE && e.y >= cluster.min.y-MIN_CLUSTER_RANGE && e.y <= cluster.max.y + MIN_CLUSTER_RANGE) {
+				let newMax: prototypes.RoomPosition = {
+					x: Math.max(e.x, cluster.max.x),
+					y: Math.max(e.y, cluster.max.y),
+				};
+				let newMin: prototypes.RoomPosition = {
+					x: Math.min(e.x, cluster.min.x),
+					y: Math.min(e.y, cluster.min.y),
+				};
+
+				let newArea = (newMax.x - newMin.x + 1) * (newMax.y - newMin.y + 1);
+
+				let density  = (cluster.units.length + 1) / newArea;
+				if (newArea == 0 || density > MIN_UNIT_DENSITY) {
+					cluster.max = newMax;
+					cluster.min = newMin;
+					cluster.power += unitPower;
+					cluster.units.push(e);
+					return cluster;
+				}
 			}
 		});
 
 		if (cluster === undefined) {
 			let newCluster: UnitCluster = {
 				id: enemyClusters.length,
-				x: e.x,
-				y: e.y,
+				min: {
+					x: e.x,
+					y: e.y,
+				},
+				max: {
+					x: e.x,
+					y: e.y,
+				},
 				power: unitPower,
 				units: new Array(e),
 				range: MIN_CLUSTER_RANGE,
 			}
 			enemyClusters.push(newCluster);
-		} else {
-			cluster.power += unitPower;
-			cluster.units.push(e);
 		}
 	});
 
 	if (state.debug) {
 		enemyClusters.forEach(cluster => {
 			let topleft: prototypes.RoomPosition = {
-				x: cluster.x-cluster.range-0.5,
-				y: cluster.y-cluster.range-0.5,
+				x: cluster.min.x-0.5,
+				y: cluster.min.y-0.5,
+			}
+			let topleftpad: prototypes.RoomPosition = {
+				x: cluster.min.x-1.5,
+				y: cluster.min.y-1.5,
 			}
 			let style: PolyStyle = {
 				fill: "#ff0000",
 				lineStyle: "solid",
 			}
-			enemyLabelViz.rect(topleft, 2*cluster.range+1, 2*cluster.range+1, style);
+			let padStyle: PolyStyle = {
+				fill: "#ffffff",
+				lineStyle: "solid",
+				opacity: 0.2,
+			}
+			enemyLabelViz.rect(topleftpad, cluster.max.x - cluster.min.x+3, cluster.max.y - cluster.min.y+3, padStyle);
+			enemyLabelViz.rect(topleft, cluster.max.x - cluster.min.x+1, cluster.max.y - cluster.min.y+1, style);
 
 			let textStyle: TextStyle = {
 				font: 0.7,
@@ -266,9 +296,10 @@ export function loop(): void {
 				text += e.id + ", ";
 			});
 			text +="\nPower: " + cluster.power;
+			text += "\nArea: " + (cluster.max.x - cluster.min.x + 1) * (cluster.max.y - cluster.min.y + 1); 
 			let centerTop: prototypes.RoomPosition = {
-				x: cluster.x,
-				y: cluster.y-cluster.range+1,
+				x: cluster.min.x + (cluster.max.x - cluster.min.x) / 2,
+				y: cluster.min.y-1,
 			} 
 			enemyLabelViz.text(text, centerTop, textStyle);
 		});
@@ -294,7 +325,7 @@ export function loop(): void {
 		}
 
 		let s = moveToAndAttack(creep, target);
-		if (s !== constants.OK) {
+		if (s !== constants.OK && s !== undefined) {
 			console.log("attack status on target", target.id, ":", s);
 		}
 	});
@@ -332,7 +363,7 @@ export function loop(): void {
 		state.cpuViz.text("Tick Wall Time ms:" + wallTimeMS, pos1);
 		state.cpuViz.text("Max Tick Wall Time (ms:" + state.maxWallTimeMS + ", tick: " + state.maxWallTimeTick + ")", pos2 );
 		state.cpuViz.text("First Tick Alloc Time ms:" + arenaInfo.cpuTimeLimitFirstTick/1_000_000, pos3);
-		state.cpuViz.text("Tick Alloc Time ms:" + arenaInfo.cpuTimeLimitFirstTick/1_000_000, pos4);
+		state.cpuViz.text("Tick Alloc Time ms:" + arenaInfo.cpuTimeLimit/1_000_000, pos4);
 	}
 }
 
