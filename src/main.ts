@@ -1,5 +1,4 @@
 //make sure todo list order is based on implementation priority
-//TODO: haul midfield containers
 //TODO: improve the spawn order and creep assignment
 //TODO: cache pathing b/w spawns
 //TODO: breakup code into separate files
