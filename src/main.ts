@@ -206,6 +206,7 @@ export function loop(): void {
 			}
 			state.containerToHauler.set(container.id, <prototypes.Creep>creep);
 			state.haulerToContainer.set(creep.id, container);
+			state.assignedConstructions.delete(creep.id);
 		}
 
 		if (container === undefined) {
@@ -281,8 +282,18 @@ export function loop(): void {
 		let containerSpent = container === undefined || !container.exists || container.store.getUsedCapacity(constants.RESOURCE_ENERGY) == 0
 		let energyOnTheGround = resource != undefined && resource.x == creep.x && resource.y == creep.y && resource.resourceType == constants.RESOURCE_ENERGY && resource.amount > 0;
 		let availCap = creep.store.getFreeCapacity(constants.RESOURCE_ENERGY);
-		let isContainerDecayingSoon = container !== undefined && container.ticksToDecay !== undefined && container.ticksToDecay < 25;
+		let usedCap = creep.store.getUsedCapacity(constants.RESOURCE_ENERGY);
 		let nearbyExtensions = creep.findInRange(myExtensions, 1).filter(i => i.store.getFreeCapacity(constants.RESOURCE_ENERGY));
+
+		let availableEnergy: number = 0;
+		if (resource != undefined && energyOnTheGround) {
+			availableEnergy = resource.amount;
+		}
+		if (usedCap != undefined) {
+			availableEnergy += usedCap;
+		}
+
+		let containerSpentButStillHaveEnergy = containerSpent && availableEnergy >= 10;
 
 		if (availCap === 0 && nearbyExtensions.length > 0) {
 			nearbyExtensions.forEach(i => {
@@ -290,16 +301,18 @@ export function loop(): void {
 			});
 		}
 		//check if able to build extensions
-		else if ((availCap === 0 && !isContainerDecayingSoon) || (containerSpent && (availCap === 0 || energyOnTheGround))) {
-			if (availCap === 0) {
-				console.log("building extensions");
+		else if (containerSpentButStillHaveEnergy) {
+			if (usedCap != undefined && usedCap >= 10) {
+				console.log("building extensions")
 				let construction = state.assignedConstructions.get(creep.id);
 				if (construction === undefined || !construction.exists) {
 					construction = undefined
 				}
-				for(let x = -1; construction != undefined && x <= 1; x++) {
-					console.log(x);
+				for(let x = -1; construction === undefined && x <= 1; x++) {
 					for(let y = -1; y <= 1; y++) {
+						if (x == 0 && y == 0) {
+							continue;
+						}
 						let res = utils.createConstructionSite({x: creep.x +x, y: creep.y + y}, prototypes.StructureExtension);
 						console.log(res);
 						if (res.object !== undefined) {
@@ -310,15 +323,18 @@ export function loop(): void {
 					}
 				}
 				if(construction !== undefined) {
-					creep.build(construction);
+					let status = creep.build(construction);
+					if (status === constants.ERR_NOT_IN_RANGE) {
+						state.assignedConstructions.delete(creep.id);
+					}
 				}
 			} else if (energyOnTheGround && resource != undefined) {
 				console.log("picking up energy");
 				creep.pickup(resource);
 			}
 		}  
-		//start dropping if container almost decayed
-		else if (availCap === 0 && isContainerDecayingSoon) {
+		//start dropping
+		else if (availCap === 0) {
 			console.log("dropping energy");
 			creep.drop(constants.RESOURCE_ENERGY);
 		}
