@@ -107,23 +107,6 @@ declare module "game/utils" {
 
   /**
    * Create new ConstructionSite at the specified location.
-   * @param x The X position.
-   * @param y The Y position.
-   * @param structurePrototype One of the following constants: StuctureExtension, StructureTower
-   * @returns Result Code: OK, ERR_INVALID_TARGET, ERR_INVALID_ARGS, ERR_RCL_NOT_ENOUGH
-   * @deprecated use the overload with a RoomPosition object
-   */
-  export function createConstructionSite<T extends BuildableStructure>(
-    x: number,
-    y: number,
-    structureType: _Constructor<T>
-  ): {
-    object?: ConstructionSite<T>;
-    error?: ERR_INVALID_ARGS | ERR_INVALID_TARGET | ERR_FULL;
-  };
-
-  /**
-   * Create new ConstructionSite at the specified location.
    * @param pos The X,Y position.
    * @param structurePrototype One of the following constants: StuctureExtension, StructureTower
    * @returns Result Code: OK, ERR_INVALID_TARGET, ERR_INVALID_ARGS, ERR_RCL_NOT_ENOUGH

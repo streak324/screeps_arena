@@ -1,16 +1,27 @@
-//TODO: form a cluster hierarchy of enemy creeps. ideas: put creeps in an quad tree. clusters in the bottom of the hierarchy should have a tile range equal to max creep attack range
-//TODO: form creep squadrons.
-//TODO: compare logistical/terrain advantage b/w squadrons and enemy clusters
-//TODO: engage squadradons against enemy clusters if stronger
-//TODO: determine attack priority of individuals in enemy cluster.
-//TODO: retreat squadrons from stronger enemy clusters.
-//TODO: implement healer logic into squadron
-//TODO: implement rangers with basic kiting
-//TODO: implement ramparts for use by squadrons
+//make sure todo list order is based on implementation priority
 //TODO: haul midfield containers
-//TODO: optimize pathfanding
+//TODO: improve the spawn order and creep assignment
+//TODO: cache pathing b/w spawns
+//TODO: breakup code into separate files
+//TODO: add enemy avoidance mechanisms to midfield workers 
+//TODO: setup ranger patrols in midfield for skirmishing
+//TODO: create healers to aid the attackers going to enemy spawn
+//TODO: identify camps for creep squads to form.
+//TODO: select creeps to be in squads
+//TODO: implement healer logic into squads
+//TODO: add rangers with basic kiting
+//TODO: move squads in unison to spawn
+//TODO: add retreat mechanisms
+//TODO: allow squads to breakup to do skirmishing
+//TODO: adjust behavior of squads against enemy clusters based on cluster's strength
+//TODO: compare logistical/terrain advantage b/w squads and enemy clusters
+//TODO: determine attack priority of individuals in enemy cluster.
+//TODO: improve algorithm for identifying clusters of enemies. ideas: DBSCAN (Density-Based Spatial Clustering of Applications with Noise)
+//TODO: implement ramparts for use by squads
 
-import { utils, prototypes, constants, visual, arenaInfo } from "game";
+import { utils, prototypes, constants, visual, arenaInfo, createConstructionSite } from "game";
+import { RoomPosition } from "game/prototypes";
+import { findInRange } from "game/utils";
 
 //its bounds will be represented by an axis aligned bounded box
 interface UnitCluster {
@@ -22,36 +33,79 @@ interface UnitCluster {
 	mass: number,
 }
 
+type SQUAD_CAMPING = "camping";
+const SQUAD_CAMPING: SQUAD_CAMPING = "camping";
+type SQUAD_MOVING = "moving";
+const SQUAD_MOVING: SQUAD_MOVING = "moving";
+
+type SquadStatus =
+	| SQUAD_CAMPING
+	| SQUAD_MOVING;
+
+//a full squad is composed of 3 attackers, 2 healers, 2 rangers
+interface Squad {
+	id: number,
+	status: SquadStatus,
+	units:  Array<prototypes.Creep>,
+	target: RoomPosition|undefined,
+}
+
 //the squared value of the max tiles that an archer can reach
 const MIN_CLUSTER_RANGE = 3;
 
 type State = {
 	debug: boolean,
-	desiredHaulers: number,
 	containerToHauler: Map<prototypes.Id<prototypes.StructureContainer>, prototypes.Creep>,
 	haulerToContainer: Map<prototypes.Id<prototypes.Creep>, prototypes.StructureContainer>,
-	newHaulers: Array<prototypes.Creep>,
+	newhaulers: Array<prototypes.Creep>,
 	haulers: Array<prototypes.Creep>,
 	newAttackers: Array<prototypes.Creep>,
 	attackers: Array<prototypes.Creep>,
 	cpuViz: visual.Visual,
 	maxWallTimeMS: number,
 	maxWallTimeTick: number,
+	squad: Squad,
+	newMidfieldWorkers: Array<prototypes.Creep>,
+	midfieldWorkers: Array<prototypes.Creep>,
+	desiredMidfieldWorkers: number,
+	assignedConstructions: Map<prototypes.Id<prototypes.Creep>, prototypes.ConstructionSite>,
 };
 
 var state: State = {
 	debug: true,
-	desiredHaulers: 3,
 	containerToHauler: new Map(),
 	haulerToContainer: new Map(),
-	newHaulers: new Array(),
+	newhaulers: new Array(),
 	haulers: new Array(),
 	cpuViz: new visual.Visual(2, true),
 	newAttackers: new Array(),
 	attackers: new Array(),
 	maxWallTimeMS: 0.0,
 	maxWallTimeTick: 1,
+	squad: {
+		id: 1,
+		status: SQUAD_MOVING,
+		units: new Array(),
+		target: undefined,
+	},
+	newMidfieldWorkers: new Array(),
+	midfieldWorkers: new Array(),
+	desiredMidfieldWorkers: 1,
+	assignedConstructions: new Map(),
 };
+
+const SPAWN_SWAMP_BASIC_ARENA_WIDTH = 100;
+const SPAWN_SWAMP_BASIC_ARENA_HEIGHT = 100;
+
+//Math.ceil((totalParts - numMove) * 5 / numMove) would be swamp ticks per tile 
+// numMove => relieved fatigue. (totalParts - numMove) * 5 => generated fatigue
+
+//attacker cost -> 2*tough + 2*attack + 4*move = 380 energy
+//healer cost -> 2*tough + 2*heal  + 4*move = 720 energy
+//ranger cost -> 3*range + 3*move = 600 energy
+//squad cost -> 3*attackers + 3*healers + 2*rangers -> 4340
+
+//midfield worker -> 2*work + 2*carry + 4*move = 500
 
 export function loop(): void {
 	let mySpawns = utils.getObjectsByPrototype(prototypes.StructureSpawn).filter(spawn => spawn.my);
@@ -64,11 +118,21 @@ export function loop(): void {
 	let enemySpawns = utils.getObjectsByPrototype(prototypes.StructureSpawn).filter(i => !i.my);
 	let enemyRamparts = utils.getObjectsByPrototype(prototypes.StructureRampart).filter(i => !i.my);
 	let enemyTowers = utils.getObjectsByPrototype(prototypes.StructureTower).filter(i => !i.my);
-	let walls = utils.getObjectsByPrototype(prototypes.StructureWall)
+	let walls = utils.getObjectsByPrototype(prototypes.StructureWall);
 	let enemyCreeps = utils.getObjectsByPrototype(prototypes.Creep).filter(creep => !creep.my);
 
-	while (state.newHaulers.length > 0) {
-		let creep = state.newHaulers.pop();
+	let creepCampOffset = 4;
+	if (mySpawn.x > SPAWN_SWAMP_BASIC_ARENA_WIDTH/2) {
+		creepCampOffset = -4;
+	}
+
+	state.squad.target = {
+		x: mySpawn.x + creepCampOffset,
+		y: mySpawn.y + creepCampOffset,
+	};
+
+	while (state.newhaulers.length > 0) {
+		let creep = state.newhaulers.pop();
 		if (creep !== undefined && creep.exists) {
 			state.haulers.push(creep);
 		}
@@ -80,15 +144,38 @@ export function loop(): void {
 			state.attackers.push(creep);
 		}
 	}
-
-	if (state.haulers.length < state.desiredHaulers) {
-		let creep = mySpawn.spawnCreep([constants.MOVE, constants.CARRY]).object;
-		if (creep !== undefined) {
-			state.newHaulers.push(creep);
+	
+	while (state.newMidfieldWorkers.length > 0) {
+		let creep = state.newMidfieldWorkers.pop();
+		if (creep !== undefined && creep.exists) {
+			state.midfieldWorkers.push(creep);
 		}
 	}
 
-	let starterContainers = utils.getObjectsByPrototype(prototypes.StructureContainer).filter(container => mySpawn.getRangeTo(container) < 5);
+	let starterContainers = utils.getObjectsByPrototype(prototypes.StructureContainer).filter(container => {
+		let isCloseToSpawn = mySpawn.getRangeTo(container) < 5;
+		let cap = container.store.getUsedCapacity(constants.RESOURCE_ENERGY);
+		return isCloseToSpawn && cap != undefined && cap > 200;
+	});
+
+	if (state.haulers.length < starterContainers.length) {
+		let creep = mySpawn.spawnCreep([constants.CARRY, constants.MOVE]).object;
+		if (creep !== undefined) {
+			state.newhaulers.push(creep);
+		}
+	} else if (state.midfieldWorkers.length < state.desiredMidfieldWorkers) {
+		let creep = mySpawn.spawnCreep([constants.WORK, constants.WORK, constants.CARRY, constants.CARRY, constants.MOVE, constants.MOVE, constants.MOVE, constants.MOVE]).object;
+		if (creep !== undefined) {
+			state.newMidfieldWorkers.push(creep);
+		}
+	} else {
+		//TODO: uncomment when done testing out the midfield worker code
+		//let creep = mySpawn.spawnCreep([constants.MOVE, constants.ATTACK, constants.MOVE, constants.MOVE, constants.ATTACK, constants.ATTACK]).object;
+		//if (creep !== undefined) {
+		//	state.newAttackers.push(creep);
+		//}
+	}
+
 	state.haulers.forEach((creep, idx) => {
 		if (creep.exists === false) {
 			state.haulers[idx] = state.haulers[state.haulers.length-1];
@@ -130,8 +217,7 @@ export function loop(): void {
 				new visual.Visual(1, false).text("Ih" + creep.id, creep, style);
 			}
 			return;
-		}
-
+		} 
 		if (state.debug) {
 			let style: TextStyle = {
 				font: 0.7,
@@ -171,12 +257,140 @@ export function loop(): void {
 			}
 		}
 	});
-	
-	let creep = mySpawn.spawnCreep([constants.MOVE, constants.ATTACK, constants.ATTACK, constants.MOVE, constants.MOVE]).object;
-	if (creep !== undefined) {
-		state.newAttackers.push(creep);
-	}
 
+	let midfieldContainers = utils.getObjectsByPrototype(prototypes.StructureContainer).filter(i => (i.x > 18 && i.x < 82 && i.y > 20 && i.y < 80) && (i.ticksToDecay === undefined || i.ticksToDecay > 50));
+	let resources = utils.getObjectsByPrototype(prototypes.Resource);
+	let myExtensions = utils.getObjectsByPrototype(prototypes.StructureExtension).filter(i => i.my);
+	state.midfieldWorkers.forEach((creep, idx) => {
+		console.log("midfield worker top");
+		if (creep.exists === false) {
+			console.log("midefield worker", creep.id, "dead. bye bye");
+			state.midfieldWorkers[idx] = state.midfieldWorkers[state.midfieldWorkers.length-1];
+			state.midfieldWorkers.pop();
+			let container = state.haulerToContainer.get(creep.id);
+			if (container !== undefined) {
+				state.containerToHauler.delete(container.id);
+			}
+			state.haulerToContainer.delete(creep.id);
+			state.assignedConstructions.delete(creep.id);
+			return;
+		}
+		let container = state.haulerToContainer.get(creep.id);
+
+		let resource = creep.findClosestByRange(resources);
+		let containerSpent = container === undefined || !container.exists || container.store.getUsedCapacity(constants.RESOURCE_ENERGY) == 0
+		let energyOnTheGround = resource != undefined && resource.x == creep.x && resource.y == creep.y && resource.resourceType == constants.RESOURCE_ENERGY && resource.amount > 0;
+		let availCap = creep.store.getFreeCapacity(constants.RESOURCE_ENERGY);
+		let isContainerDecayingSoon = container !== undefined && container.ticksToDecay !== undefined && container.ticksToDecay < 25;
+		let nearbyExtensions = creep.findInRange(myExtensions, 1).filter(i => i.store.getFreeCapacity(constants.RESOURCE_ENERGY));
+
+		if (availCap === 0 && nearbyExtensions.length > 0) {
+			nearbyExtensions.forEach(i => {
+				creep.transfer(i, constants.RESOURCE_ENERGY);
+			});
+		}
+		//check if able to build extensions
+		else if ((availCap === 0 && !isContainerDecayingSoon) || (containerSpent && (availCap === 0 || energyOnTheGround))) {
+			if (availCap === 0) {
+				console.log("building extensions");
+				let construction = state.assignedConstructions.get(creep.id);
+				if (construction === undefined || !construction.exists) {
+					construction = undefined
+				}
+				for(let x = -1; construction != undefined && x <= 1; x++) {
+					console.log(x);
+					for(let y = -1; y <= 1; y++) {
+						let res = utils.createConstructionSite({x: creep.x +x, y: creep.y + y}, prototypes.StructureExtension);
+						console.log(res);
+						if (res.object !== undefined) {
+							construction = res.object;
+							state.assignedConstructions.set(creep.id, res.object);
+							break;
+						}
+					}
+				}
+				if(construction !== undefined) {
+					creep.build(construction);
+				}
+			} else if (energyOnTheGround && resource != undefined) {
+				console.log("picking up energy");
+				creep.pickup(resource);
+			}
+		}  
+		//start dropping if container almost decayed
+		else if (availCap === 0 && isContainerDecayingSoon) {
+			console.log("dropping energy");
+			creep.drop(constants.RESOURCE_ENERGY);
+		}
+		//look for a new container
+		else if (containerSpent) {
+			console.log("looking for container", midfieldContainers.length, " midfield containers for the pickings");
+			if (container !== undefined) {
+				state.haulerToContainer.delete(creep.id);
+				state.containerToHauler.delete(container.id);
+			}
+
+			let bestContainer: prototypes.StructureContainer|undefined;
+			let bestDist: number;
+			midfieldContainers.forEach(container => {
+				let assignedCreep = state.containerToHauler.get(container.id);
+				if (assignedCreep !== undefined && assignedCreep.exists) {
+					return;
+				}
+				let dist = creep.getRangeTo(container)
+				if (bestContainer !== undefined && dist < bestDist) {
+					return;
+				}
+
+				if (container.findInRange(enemyCreeps, 5).length > 0) {
+					return;
+				}
+
+				bestDist = dist;
+				bestContainer = container;
+			});
+			if (bestContainer === undefined) {
+				return;
+			}
+			state.containerToHauler.set(bestContainer.id, <prototypes.Creep>creep);
+			state.haulerToContainer.set(creep.id, bestContainer);
+		}
+
+		if (container === undefined || !container.exists) {
+			if (state.debug) {
+				let style: TextStyle = {
+					font: 0.7,
+					color: "#ff0000",
+				}
+				new visual.Visual(1, false).text("Ih" + creep.id, creep, style);
+			}
+			return;
+		}
+
+		if (state.debug) {
+			let style: TextStyle = {
+				font: 0.7,
+				color: "#800080",
+			}
+			new visual.Visual(1, false).text("h" + creep.id, container, style);
+			new visual.Visual(1, false).text("h" + creep.id, creep, style);
+		}
+
+		if(creep.id == undefined) {
+			return;
+		}
+
+		if (availCap != undefined && availCap > 0) {
+			let status = creep.withdraw(container, constants.RESOURCE_ENERGY)
+			if (status === undefined) {
+				console.log(creep.id, "got undefined withdraw status from container",container.id);
+				return;
+			}
+			if (status === constants.ERR_NOT_IN_RANGE) {
+				creep.moveTo(container);
+			}
+		}
+	});
 
 	//clustering enemies
 	let enemyClusters = new Array<UnitCluster>();
