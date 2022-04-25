@@ -1,10 +1,10 @@
 //make sure todo list order is based on implementation priority
-//TODO: improve the spawn order and creep assignment
-//TODO: cache pathing b/w spawns
-//TODO: breakup code into separate files
-//TODO: add enemy avoidance mechanisms to midfield workers 
-//TODO: setup ranger patrols in midfield for skirmishing
 //TODO: create healers to aid the attackers going to enemy spawn
+//TODO: add enemy avoidance mechanisms 
+//TODO: setup ranger patrols in midfield for skirmishing
+//TODO: improve the spawn order and creep assignment
+//TODO: breakup code into separate files
+//TODO: add haulers to aid midfield worker
 //TODO: identify camps for creep squads to form.
 //TODO: select creeps to be in squads
 //TODO: implement healer logic into squads
@@ -19,8 +19,7 @@
 //TODO: implement ramparts for use by squads
 
 import { utils, prototypes, constants, visual, arenaInfo, createConstructionSite } from "game";
-import { RoomPosition } from "game/prototypes";
-import { findInRange } from "game/utils";
+import { getTicks } from "game/utils";
 
 //its bounds will be represented by an axis aligned bounded box
 interface UnitCluster {
@@ -46,8 +45,14 @@ interface Squad {
 	id: number,
 	status: SquadStatus,
 	units:  Array<prototypes.Creep>,
-	target: RoomPosition|undefined,
+	target: prototypes.RoomPosition|undefined,
 }
+
+const DIRECTION_ARRAY: constants.DirectionConstant[] = [
+	constants.TOP_LEFT, constants.TOP, constants.TOP_RIGHT,
+	constants.LEFT, constants.TOP, constants.RIGHT,
+	constants.BOTTOM_LEFT, constants.BOTTOM, constants.BOTTOM_RIGHT,
+];
 
 //the squared value of the max tiles that an archer can reach
 const MIN_CLUSTER_RANGE = 3;
@@ -68,6 +73,7 @@ type State = {
 	midfieldWorkers: Array<prototypes.Creep>,
 	desiredMidfieldWorkers: number,
 	assignedConstructions: Map<prototypes.Id<prototypes.Creep>, prototypes.ConstructionSite>,
+	cachedSpawnPaths: Array<prototypes.RoomPosition[]>,
 };
 
 var state: State = {
@@ -91,6 +97,7 @@ var state: State = {
 	midfieldWorkers: new Array(),
 	desiredMidfieldWorkers: 1,
 	assignedConstructions: new Map(),
+	cachedSpawnPaths: new Array(),
 };
 
 const SPAWN_SWAMP_BASIC_ARENA_WIDTH = 100;
@@ -119,6 +126,12 @@ export function loop(): void {
 	let enemyTowers = utils.getObjectsByPrototype(prototypes.StructureTower).filter(i => !i.my);
 	let walls = utils.getObjectsByPrototype(prototypes.StructureWall);
 	let enemyCreeps = utils.getObjectsByPrototype(prototypes.Creep).filter(creep => !creep.my);
+
+	//WE ARE AT THE START OF THE GAME. DO ALL STATIC COMPUTATION HERE
+	if (getTicks() === 1) {
+		state.cachedSpawnPaths.push(utils.findPath({x: mySpawn.x, y: mySpawn.y+10}, enemySpawns[0]));
+		state.cachedSpawnPaths.push(utils.findPath({x: mySpawn.x, y: mySpawn.y-10}, enemySpawns[0]));
+	}
 
 	let creepCampOffset = 4;
 	if (mySpawn.x > SPAWN_SWAMP_BASIC_ARENA_WIDTH/2) {
@@ -570,6 +583,7 @@ export function loop(): void {
 	}
 
 	//running logic for individual attack units
+	console.log("wall time before attacker logic", utils.getCpuTime()/1_000_000);
 	state.attackers.forEach(creep => {
 		let target: prototypes.Creep | prototypes.Structure | undefined;
 		let e = creep.findClosestByRange(enemyCreeps);
@@ -588,11 +602,51 @@ export function loop(): void {
 			return;
 		}
 
-		let s = moveToAndAttack(creep, target);
+		let s: constants.CreepActionReturnCode | constants.CreepMoveReturnCode | constants.ERR_NO_PATH | constants.ERR_INVALID_TARGET | undefined = creep.attack(target)
+		if (s === constants.ERR_NOT_IN_RANGE) {
+			let targetDist = creep.getRangeTo(target);
+			if (target === enemySpawns[0] && targetDist > 10) {
+				let bestTile: prototypes.RoomPosition|undefined;
+				let bestDistToCreep: number; 
+				state.cachedSpawnPaths.forEach(i => {
+					i.forEach((tile, idx) => {
+						if (tile == undefined) {
+							return;
+						}
+						let dist = creep.getRangeTo(tile);
+						if (bestTile === undefined) {
+							bestTile = tile;
+							bestDistToCreep = dist;
+							return;
+						}
+
+						if (dist === 0 || bestDistToCreep < dist) {
+							return;
+						}
+						bestTile = tile;
+						bestDistToCreep = dist;
+					});
+				});
+				if (bestTile !== undefined) {
+					if (creep.getRangeTo(bestTile) < 2) {
+						let dx = bestTile.x - creep.x;
+						let dy = bestTile.y - creep.y;
+						s= creep.move(utils.getDirection(dx, dy));
+					} else {
+						s = creep.moveTo(bestTile);
+					}
+				} else {
+					s = creep.moveTo(target);
+				}
+			} else {
+				s = creep.moveTo(target);
+			}
+		}
 		if (s !== constants.OK && s !== undefined) {
 			console.log("attack status on target", target.id, ":", s);
 		}
 	});
+	console.log("wall time after attacker logic", utils.getCpuTime()/1_000_000);
 
 	if (state.debug) {
 		let style: TextStyle = {
@@ -629,13 +683,4 @@ export function loop(): void {
 		state.cpuViz.text("First Tick Alloc Time ms:" + arenaInfo.cpuTimeLimitFirstTick/1_000_000, pos3);
 		state.cpuViz.text("Tick Alloc Time ms:" + arenaInfo.cpuTimeLimit/1_000_000, pos4);
 	}
-}
-
-function moveToAndAttack(creep: prototypes.Creep, target: prototypes.Creep | prototypes.Structure): constants.CreepActionReturnCode | constants.CreepMoveReturnCode | constants.ERR_NO_PATH | constants.ERR_INVALID_TARGET | undefined {
-	let s = creep.attack(target)
-	if (s === constants.ERR_NOT_IN_RANGE) {
-		return creep.moveTo(target);
-	}
-	return s;
-
 }
