@@ -19,7 +19,7 @@
 //TODO: implement ramparts for use by squads
 
 import { utils, prototypes, constants, visual, arenaInfo, createConstructionSite } from "game";
-import { getTicks } from "game/utils";
+import { CostMatrix, FindPathOpts } from "game/path-finder";
 
 //its bounds will be represented by an axis aligned bounded box
 interface UnitCluster {
@@ -57,6 +57,12 @@ const DIRECTION_ARRAY: constants.DirectionConstant[] = [
 //the squared value of the max tiles that an archer can reach
 const MIN_CLUSTER_RANGE = 3;
 
+type Target = {
+	id: prototypes.Id<prototypes.GameObject>	
+	x: number,
+	y: number,
+};
+
 type State = {
 	debug: boolean,
 	containerToHauler: Map<prototypes.Id<prototypes.StructureContainer>, prototypes.Creep>,
@@ -73,32 +79,11 @@ type State = {
 	midfieldWorkers: Array<prototypes.Creep>,
 	desiredMidfieldWorkers: number,
 	assignedConstructions: Map<prototypes.Id<prototypes.Creep>, prototypes.ConstructionSite>,
-	cachedSpawnPaths: Array<prototypes.RoomPosition[]>,
+	creepsTargets: Map<prototypes.Id<prototypes.Creep>, Target>,
+	creepsPaths: Map<prototypes.Id<prototypes.Creep>, prototypes.RoomPosition[]>
 };
 
-var state: State = {
-	debug: true,
-	containerToHauler: new Map(),
-	haulerToContainer: new Map(),
-	newhaulers: new Array(),
-	haulers: new Array(),
-	cpuViz: new visual.Visual(2, true),
-	newAttackers: new Array(),
-	attackers: new Array(),
-	maxWallTimeMS: 0.0,
-	maxWallTimeTick: 1,
-	squad: {
-		id: 1,
-		status: SQUAD_MOVING,
-		units: new Array(),
-		target: undefined,
-	},
-	newMidfieldWorkers: new Array(),
-	midfieldWorkers: new Array(),
-	desiredMidfieldWorkers: 1,
-	assignedConstructions: new Map(),
-	cachedSpawnPaths: new Array(),
-};
+let state: State;
 
 const SPAWN_SWAMP_BASIC_ARENA_WIDTH = 100;
 const SPAWN_SWAMP_BASIC_ARENA_HEIGHT = 100;
@@ -121,17 +106,46 @@ export function loop(): void {
 	}
 	let mySpawn = mySpawns[0];
 
+	let allCreeps = utils.getObjectsByPrototype(prototypes.Creep);
 	let enemySpawns = utils.getObjectsByPrototype(prototypes.StructureSpawn).filter(i => !i.my);
 	let enemyRamparts = utils.getObjectsByPrototype(prototypes.StructureRampart).filter(i => !i.my);
 	let enemyTowers = utils.getObjectsByPrototype(prototypes.StructureTower).filter(i => !i.my);
 	let walls = utils.getObjectsByPrototype(prototypes.StructureWall);
-	let enemyCreeps = utils.getObjectsByPrototype(prototypes.Creep).filter(creep => !creep.my);
+	let enemyCreeps = allCreeps.filter(creep => !creep.my);
 
 	//WE ARE AT THE START OF THE GAME. DO ALL STATIC COMPUTATION HERE
-	if (getTicks() === 1) {
-		state.cachedSpawnPaths.push(utils.findPath({x: mySpawn.x, y: mySpawn.y+10}, enemySpawns[0]));
-		state.cachedSpawnPaths.push(utils.findPath({x: mySpawn.x, y: mySpawn.y-10}, enemySpawns[0]));
+	if (utils.getTicks() === 1) {
+		state = {
+			debug: true,
+			containerToHauler: new Map(),
+			haulerToContainer: new Map(),
+			newhaulers: new Array(),
+			haulers: new Array(),
+			cpuViz: new visual.Visual(2, true),
+			newAttackers: new Array(),
+			attackers: new Array(),
+			maxWallTimeMS: 0.0,
+			maxWallTimeTick: 1,
+			squad: {
+				id: 1,
+				status: SQUAD_MOVING,
+				units: new Array(),
+				target: undefined,
+			},
+			newMidfieldWorkers: new Array(),
+			midfieldWorkers: new Array(),
+			desiredMidfieldWorkers: 1,
+			assignedConstructions: new Map(),
+			creepsTargets: new Map(),
+			creepsPaths: new Map(),
+		};
 	}
+
+
+	let costMatrix = new CostMatrix();
+	allCreeps.forEach(creep => {
+		costMatrix.set(creep.x, creep.y, 255);
+	})
 
 	let creepCampOffset = 4;
 	if (mySpawn.x > SPAWN_SWAMP_BASIC_ARENA_WIDTH/2) {
@@ -604,48 +618,55 @@ export function loop(): void {
 
 		let s: constants.CreepActionReturnCode | constants.CreepMoveReturnCode | constants.ERR_NO_PATH | constants.ERR_INVALID_TARGET | undefined = creep.attack(target)
 		if (s === constants.ERR_NOT_IN_RANGE) {
-			let targetDist = creep.getRangeTo(target);
-			if (target === enemySpawns[0] && targetDist > 10) {
-				let bestTile: prototypes.RoomPosition|undefined;
-				let bestDistToCreep: number; 
-				state.cachedSpawnPaths.forEach(i => {
-					i.forEach((tile, idx) => {
-						if (tile == undefined) {
-							return;
-						}
-						let dist = creep.getRangeTo(tile);
-						if (bestTile === undefined) {
-							bestTile = tile;
-							bestDistToCreep = dist;
-							return;
-						}
-
-						if (dist === 0 || bestDistToCreep < dist) {
-							return;
-						}
-						bestTile = tile;
-						bestDistToCreep = dist;
-					});
-				});
-				if (bestTile !== undefined) {
-					if (creep.getRangeTo(bestTile) < 2) {
-						let dx = bestTile.x - creep.x;
-						let dy = bestTile.y - creep.y;
-						s= creep.move(utils.getDirection(dx, dy));
-					} else {
-						s = creep.moveTo(bestTile);
-					}
-				} else {
-					s = creep.moveTo(target);
-				}
-			} else {
-				s = creep.moveTo(target);
+			let findPathOpts: FindPathOpts = {
+				costMatrix: costMatrix,
 			}
+			let prevTarget = state.creepsTargets.get(creep.id);
+			let path = state.creepsPaths.get(creep.id);
+			if (prevTarget === undefined || path === undefined || prevTarget.id !== target.id || prevTarget.x != target.x || prevTarget.y != target.y) {
+				if (prevTarget !== undefined) {
+					console.log("reevaluating path");
+				}
+				path = creep.findPathTo(target, findPathOpts);
+				state.creepsTargets.set(creep.id, {
+					id: target.id,
+					x: target.x,
+					y: target.y,
+				});
+				state.creepsPaths.set(creep.id, path);
+			}
+
+			let bestTile = findNextTileInPath(creep, path);
+			if (bestTile !== undefined) {
+				let cost = costMatrix.get(bestTile.x, bestTile.y);
+				//this can happen if the path was cached
+				if (cost === 255) {
+					path = creep.findPathTo(target, findPathOpts);
+					state.creepsPaths.set(creep.id, path);
+					bestTile = findNextTileInPath(creep, path);
+				}
+			}
+
+			if (bestTile !== undefined) {
+				let dx = bestTile.x - creep.x;
+				let dy = bestTile.y - creep.y;
+				if (dx === 0 && dy === 0) {
+					console.log(path);
+				}
+				s= creep.move(utils.getDirection(dx, dy));
+				costMatrix.set(creep.x, creep.y, 0);
+				costMatrix.set(bestTile.x, bestTile.y, 255);
+			} else {
+				console.log("ERROR. UNABLE TO SET GET TILE. RE-EVALUATING");
+				state.creepsPaths.delete(creep.id);
+			}
+
 		}
 		if (s !== constants.OK && s !== undefined) {
 			console.log("attack status on target", target.id, ":", s);
 		}
 	});
+
 	console.log("wall time after attacker logic", utils.getCpuTime()/1_000_000);
 
 	if (state.debug) {
@@ -683,4 +704,23 @@ export function loop(): void {
 		state.cpuViz.text("First Tick Alloc Time ms:" + arenaInfo.cpuTimeLimitFirstTick/1_000_000, pos3);
 		state.cpuViz.text("Tick Alloc Time ms:" + arenaInfo.cpuTimeLimit/1_000_000, pos4);
 	}
+}
+
+function findNextTileInPath(creep: prototypes.Creep, path: prototypes.RoomPosition[]): prototypes.RoomPosition|undefined {
+	let bestTile: prototypes.RoomPosition|undefined;
+	let bestDistToCreep: number = 0; 
+	path.forEach(tile => {
+		if (creep.x === tile.x &&  creep.y === tile.y) {
+			return;
+		}
+
+		let dist = creep.getRangeTo(tile);
+		if (bestTile !== undefined && bestDistToCreep < dist) {
+			return;
+		}
+		bestTile = tile;
+		bestDistToCreep = dist;
+	});
+
+	return bestTile;
 }
