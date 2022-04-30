@@ -49,6 +49,8 @@ const SPAWN_SWAMP_BASIC_ARENA_HEIGHT = 100;
 //midfield worker -> 2*work + 2*carry + 4*move = 500
 
 export function loop(): void {
+
+	let allSpawns = utils.getObjectsByPrototype(prototypes.StructureSpawn);
 	let mySpawns = utils.getObjectsByPrototype(prototypes.StructureSpawn).filter(spawn => spawn.my);
 	if (mySpawns.length == 0) {
 		console.log("wtf. spawns are dead");
@@ -90,9 +92,8 @@ export function loop(): void {
 
 
 	let costMatrix = new CostMatrix();
-	allCreeps.forEach(creep => {
-		costMatrix.set(creep.x, creep.y, 255);
-	})
+	allCreeps.forEach(creep => { costMatrix.set(creep.x, creep.y, 255); })
+	allSpawns.forEach(i => { costMatrix.set(i.x, i.y, 255); });
 
 	let creepCampOffset = 4;
 	if (mySpawn.x > SPAWN_SWAMP_BASIC_ARENA_WIDTH/2) {
@@ -207,7 +208,7 @@ export function loop(): void {
 	//running logic for individual attack units
 	console.log("wall time before attacker logic", utils.getCpuTime()/1_000_000);
 	state.attackers.forEach(creep => {
-		military.runAttackerLogic(creep, state, costMatrix, enemyCreeps, enemySpawns, enemyRamparts);
+		military.runAttackerLogic(creep, state, costMatrix, mySpawns, enemyCreeps, enemySpawns, enemyRamparts);
 	});
 
 	console.log("wall time after attacker logic", utils.getCpuTime()/1_000_000);

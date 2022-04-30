@@ -4,8 +4,13 @@ import { CostMatrix, FindPathOpts } from "game/path-finder";
 
 import * as types from "./types";
 import * as pathutils from "./pathutils";
+import { CREEP_SPAWN_TIME } from "game/constants";
 
-export function runAttackerLogic(creep: prototypes.Creep, state: types.State, costMatrix: CostMatrix, enemyCreeps: Array<prototypes.Creep>, enemySpawns: prototypes.StructureSpawn[], enemyRamparts: prototypes.StructureRampart[]) {
+export function runAttackerLogic(creep: prototypes.Creep, state: types.State, costMatrix: CostMatrix, mySpawns: prototypes.StructureSpawn[], enemyCreeps: Array<prototypes.Creep>, enemySpawns: prototypes.StructureSpawn[], enemyRamparts: prototypes.StructureRampart[]) {
+	if(mySpawns.find(i => i.x === creep.x && i.y === creep.y)) {
+		return;
+	}
+
 	let target: prototypes.Creep | prototypes.Structure | undefined;
 	let e = creep.findClosestByRange(enemyCreeps);
 	if (e != undefined && utils.getRange(creep, e) < 5 && e.hits > 0 && utils.getRange(e, enemySpawns[0]) > 0.5) {
@@ -60,7 +65,8 @@ export function runAttackerLogic(creep: prototypes.Creep, state: types.State, co
 			if (dx === 0 && dy === 0) {
 				console.log(path);
 			}
-			s= creep.move(utils.getDirection(dx, dy));
+			let moveDir = utils.getDirection(dx, dy)
+			s= creep.move(moveDir);
 			costMatrix.set(creep.x, creep.y, 0);
 			costMatrix.set(bestTile.x, bestTile.y, 255);
 		} else {
