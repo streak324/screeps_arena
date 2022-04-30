@@ -3,7 +3,6 @@
 //TODO: add enemy avoidance mechanisms 
 //TODO: setup ranger patrols in midfield for skirmishing
 //TODO: improve midfield energy utilization
-//TODO: improve the spawn order and creep assignment
 //TODO: breakup code into separate files
 //TODO: add haulers to aid midfield worker
 //TODO: identify camps for creep squads to form.
@@ -71,15 +70,9 @@ export function loop(): void {
 			debug: true,
 			containerToHauler: new Map(),
 			haulerToContainer: new Map(),
-			newhaulers: new Array(),
-			haulers: new Array(),
 			cpuViz: new visual.Visual(2, true),
-			newAttackers: new Array(),
-			attackers: new Array(),
 			maxWallTimeMS: 0.0,
 			maxWallTimeTick: 1,
-			newMidfieldWorkers: new Array(),
-			midfieldWorkers: new Array(),
 			desiredMidfieldWorkers: 1,
 			assignedConstructions: new Map(),
 			creepsTargets: new Map(),
@@ -87,6 +80,8 @@ export function loop(): void {
 			combatPairCounter: 0,
 			combatPairs: new Array(),
 			creepIdToCombatPair: new Map(),
+			newCreepUnits: new Array(),
+			myCreepUnits: new Array(),
 		};
 	}
 
@@ -100,24 +95,10 @@ export function loop(): void {
 		creepCampOffset = -4;
 	}
 
-	while (state.newhaulers.length > 0) {
-		let creep = state.newhaulers.pop();
-		if (creep !== undefined && creep.exists) {
-			state.haulers.push(creep);
-		}
-	}
-
-	while (state.newAttackers.length > 0) {
-		let creep = state.newAttackers.pop();
-		if (creep !== undefined && creep.exists) {
-			state.attackers.push(creep);
-		}
-	}
-	
-	while (state.newMidfieldWorkers.length > 0) {
-		let creep = state.newMidfieldWorkers.pop();
-		if (creep !== undefined && creep.exists) {
-			state.midfieldWorkers.push(creep);
+	while (state.newCreepUnits.length > 0) {
+		let unit = state.newCreepUnits.pop();
+		if (unit !== undefined && unit.c.exists) {
+			state.myCreepUnits.push(unit);
 		}
 	}
 
@@ -127,33 +108,29 @@ export function loop(): void {
 		return isCloseToSpawn && cap != undefined && cap > 200;
 	});
 
-	if (state.haulers.length < starterContainers.length) {
+	let numHaulers = state.myCreepUnits.filter(i => i.role === types.HAULER).length;
+	let numWorkers = state.myCreepUnits.filter(i => i.role === types.WORKER).length;
+
+	if (numHaulers < starterContainers.length) {
 		let creep = mySpawn.spawnCreep([constants.CARRY, constants.MOVE]).object;
 		if (creep !== undefined) {
-			state.newhaulers.push(creep);
+			state.newCreepUnits.push({role: types.HAULER, c: creep});
 		}
-	} else if (state.midfieldWorkers.length < state.desiredMidfieldWorkers) {
+	} else if (numWorkers < state.desiredMidfieldWorkers) {
 		let creep = mySpawn.spawnCreep([constants.WORK, constants.WORK, constants.CARRY, constants.CARRY, constants.MOVE, constants.MOVE, constants.MOVE, constants.MOVE]).object;
 		if (creep !== undefined) {
-			state.newMidfieldWorkers.push(creep);
+			state.newCreepUnits.push({role: types.WORKER, c: creep});
 		}
 	} else {
 		let creep = mySpawn.spawnCreep([constants.MOVE, constants.ATTACK, constants.MOVE, constants.MOVE, constants.ATTACK, constants.ATTACK]).object;
 		if (creep !== undefined) {
-			state.newAttackers.push(creep);
+			state.newCreepUnits.push({role: types.ATTACKER, c: creep});
 		}
 	}
-
-	state.haulers.forEach((creep: prototypes.Creep, idx: number) => {
-		hauler.runLogic(creep, idx, state, starterContainers, mySpawn);
-	});
 
 	let midfieldContainers = utils.getObjectsByPrototype(prototypes.StructureContainer).filter(i => (i.x > 18 && i.x < 82 && i.y > 20 && i.y < 80));
 	let resources = utils.getObjectsByPrototype(prototypes.Resource);
 	let myExtensions = utils.getObjectsByPrototype(prototypes.StructureExtension).filter(i => i.my);
-	state.midfieldWorkers.forEach((creep, idx) => {
-		midfieldworker.runLogic(creep, idx, state, resources, myExtensions, midfieldContainers, enemyCreeps)
-	});
 
 	//clustering enemies
 	let enemyClusters = new Array<types.UnitCluster>();
@@ -205,20 +182,38 @@ export function loop(): void {
 		});
 	}
 
-	//running logic for individual attack units
-	console.log("wall time before attacker logic", utils.getCpuTime()/1_000_000);
-	state.attackers.forEach(creep => {
-		military.runAttackerLogic(creep, state, costMatrix, mySpawns, enemyCreeps, enemySpawns, enemyRamparts);
-	});
-
-	console.log("wall time after attacker logic", utils.getCpuTime()/1_000_000);
-
-	if (state.debug) {
-		let style: TextStyle = {
-			font: 8.0,
-			color: "#800080",
+	state.myCreepUnits.forEach((i, idx) => {
+		if(mySpawns.find(j => j.x === i.c.x && j.y === i.c.y)) {
+			return;
 		}
 
+		if (!i.c.exists) {
+			state.myCreepUnits[idx] = state.myCreepUnits[state.myCreepUnits.length-1];
+			state.myCreepUnits.pop();
+			console.log("creep", i.c.id, "dead. bye bye");
+			let container = state.haulerToContainer.get(i.c.id);
+			if (container !== undefined) {
+				state.containerToHauler.delete(container.id);
+			}
+			state.haulerToContainer.delete(i.c.id);
+			state.assignedConstructions.delete(i.c.id);
+			return;
+		}
+
+		switch (i.role) {
+			case types.HAULER: {
+				hauler.runLogic(i.c, idx, state, starterContainers, mySpawn);
+			} break;
+			case types.WORKER: {
+				midfieldworker.runLogic(i.c, idx, state, resources, myExtensions, midfieldContainers, enemyCreeps);
+			} break;
+			case types.ATTACKER: {
+				military.runAttackerLogic(i.c, state, costMatrix, mySpawns, enemyCreeps, enemySpawns, enemyRamparts);
+			} break;
+		}
+	});
+
+	if (state.debug) {
 		let wallTimeMS = utils.getCpuTime()/1_000_000;
 		if (state.maxWallTimeMS < wallTimeMS) {
 			state.maxWallTimeMS = wallTimeMS;

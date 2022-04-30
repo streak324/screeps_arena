@@ -1,19 +1,7 @@
 import { prototypes, visual, constants, utils} from "game";
-import { State} from "types";
+import * as types from "types";
 
-export function runLogic(creep: prototypes.Creep, idx: number, state: State, resources: prototypes.Resource[], myExtensions: prototypes.StructureExtension[], midfieldContainers: prototypes.StructureContainer[], enemyCreeps: prototypes.Creep[]) {
-	if (creep.exists === false) {
-		console.log("midefield worker", creep.id, "dead. bye bye");
-		state.midfieldWorkers[idx] = state.midfieldWorkers[state.midfieldWorkers.length-1];
-		state.midfieldWorkers.pop();
-		let container = state.haulerToContainer.get(creep.id);
-		if (container !== undefined) {
-			state.containerToHauler.delete(container.id);
-		}
-		state.haulerToContainer.delete(creep.id);
-		state.assignedConstructions.delete(creep.id);
-		return;
-	}
+export function runLogic(creep: prototypes.Creep, idx: number, state: types.State, resources: prototypes.Resource[], myExtensions: prototypes.StructureExtension[], midfieldContainers: prototypes.StructureContainer[], enemyCreeps: prototypes.Creep[]) {
 	let container = state.haulerToContainer.get(creep.id);
 
 	let resource = creep.findClosestByRange(resources);

@@ -7,10 +7,6 @@ import * as pathutils from "./pathutils";
 import { CREEP_SPAWN_TIME } from "game/constants";
 
 export function runAttackerLogic(creep: prototypes.Creep, state: types.State, costMatrix: CostMatrix, mySpawns: prototypes.StructureSpawn[], enemyCreeps: Array<prototypes.Creep>, enemySpawns: prototypes.StructureSpawn[], enemyRamparts: prototypes.StructureRampart[]) {
-	if(mySpawns.find(i => i.x === creep.x && i.y === creep.y)) {
-		return;
-	}
-
 	let target: prototypes.Creep | prototypes.Structure | undefined;
 	let e = creep.findClosestByRange(enemyCreeps);
 	if (e != undefined && utils.getRange(creep, e) < 5 && e.hits > 0 && utils.getRange(e, enemySpawns[0]) > 0.5) {
