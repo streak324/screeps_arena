@@ -24,12 +24,8 @@ export function runAttackerLogic(creep: prototypes.Creep, state: types.State, co
 		return;
 	}
 
-	let s: constants.CreepActionReturnCode | constants.CreepMoveReturnCode | constants.ERR_NO_PATH | constants.ERR_INVALID_TARGET | undefined = creep.attack(target)
-	if (s === constants.ERR_NOT_IN_RANGE) {
-		pathutils.moveCreepToTarget(creep, target, costMatrix, state);
-	} else if (s !== constants.OK && s !== undefined) {
-		console.log("attack status on target", target.id, ":", s);
-	}
+	pathutils.moveCreepToTarget(creep, target, costMatrix, state);
+	creep.attack(target);
 }
 
 export function runHealerLogic(creep: prototypes.Creep, state: types.State, costMatrix: CostMatrix, combatPairs: Map<prototypes.Id<prototypes.Creep>, types.CombatPair>, mySpawns: prototypes.StructureSpawn[]) {
@@ -41,12 +37,8 @@ export function runHealerLogic(creep: prototypes.Creep, state: types.State, cost
 
 	let patientHPPercent = pair.attacker.hits / pair.attacker.hitsMax;
 	if (patientHPPercent < 1) {
-		let s = creep.heal(pair.attacker);
-		if (s === constants.ERR_NOT_IN_RANGE) {
-			pathutils.moveCreepToTarget(creep, pair.attacker, costMatrix, state);
-		} else if (s !== constants.OK && s !== undefined) {
-			console.log("medic status on healing pair", creep.id, pair.attacker.id, ":", s);
-		}
+		pathutils.moveCreepToTarget(creep, pair.attacker, costMatrix, state);
+		creep.heal(pair.attacker);
 	} else {
 		pathutils.moveCreepToTarget(creep, pair.attacker, costMatrix, state);
 	}
