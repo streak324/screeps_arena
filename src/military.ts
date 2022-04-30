@@ -26,52 +26,63 @@ export function runAttackerLogic(creep: prototypes.Creep, state: types.State, co
 
 	let s: constants.CreepActionReturnCode | constants.CreepMoveReturnCode | constants.ERR_NO_PATH | constants.ERR_INVALID_TARGET | undefined = creep.attack(target)
 	if (s === constants.ERR_NOT_IN_RANGE) {
-		let findPathOpts: FindPathOpts = {
-			costMatrix: costMatrix,
-		}
-		let prevTarget = state.creepsTargets.get(creep.id);
-		let path = state.creepsPaths.get(creep.id);
-		if (prevTarget === undefined || path === undefined || prevTarget.id !== target.id || prevTarget.x != target.x || prevTarget.y != target.y) {
-			if (prevTarget !== undefined) {
-				console.log("reevaluating path");
-			}
-			path = creep.findPathTo(target, findPathOpts);
-			state.creepsTargets.set(creep.id, {
-				id: target.id,
-				x: target.x,
-				y: target.y,
-			});
-			state.creepsPaths.set(creep.id, path);
-		}
-
-		let bestTile = pathutils.findNextTileInPath(creep, path);
-		if (bestTile !== undefined) {
-			let cost = costMatrix.get(bestTile.x, bestTile.y);
-			//this can happen if the path was cached
-			if (cost === 255) {
-				path = creep.findPathTo(target, findPathOpts);
-				state.creepsPaths.set(creep.id, path);
-				bestTile = pathutils.findNextTileInPath(creep, path);
-			}
-		}
-
-		if (bestTile !== undefined) {
-			let dx = bestTile.x - creep.x;
-			let dy = bestTile.y - creep.y;
-			if (dx === 0 && dy === 0) {
-				console.log(path);
-			}
-			let moveDir = utils.getDirection(dx, dy)
-			s= creep.move(moveDir);
-			costMatrix.set(creep.x, creep.y, 0);
-			costMatrix.set(bestTile.x, bestTile.y, 255);
-		} else {
-			console.log("ERROR. UNABLE TO SET GET TILE. RE-EVALUATING");
-			state.creepsPaths.delete(creep.id);
-		}
-
-	}
-	if (s !== constants.OK && s !== undefined) {
+		pathutils.moveCreepToTarget(creep, target, costMatrix, state);
+	} else if (s !== constants.OK && s !== undefined) {
 		console.log("attack status on target", target.id, ":", s);
 	}
+}
+
+export function runHealerLogic(creep: prototypes.Creep, state: types.State, costMatrix: CostMatrix, combatPairs: Map<prototypes.Id<prototypes.Creep>, types.CombatPair>, mySpawns: prototypes.StructureSpawn[]) {
+	let pair = combatPairs.get(creep.id);
+	if (pair === undefined) {
+		pathutils.moveCreepToTarget(creep, mySpawns[0], costMatrix, state);
+		return;
+	}
+
+	let patientHPPercent = pair.attacker.hits / pair.attacker.hitsMax;
+	if (patientHPPercent < 1) {
+		let s = creep.heal(pair.attacker);
+		if (s === constants.ERR_NOT_IN_RANGE) {
+			pathutils.moveCreepToTarget(creep, pair.attacker, costMatrix, state);
+		} else if (s !== constants.OK && s !== undefined) {
+			console.log("medic status on healing pair", creep.id, pair.attacker.id, ":", s);
+		}
+	} else {
+		pathutils.moveCreepToTarget(creep, pair.attacker, costMatrix, state);
+	}
+}
+
+export function developCombatPairs(state: types.State, mySpawns: prototypes.StructureSpawn[]): Map<prototypes.Id<prototypes.Creep>, types.CombatPair> {
+	let pairs: Map<prototypes.Id<prototypes.Creep>, types.CombatPair> = new Map();
+
+	let healers = state.myCreepUnits.filter(i => i.role === types.HEALER);
+	let attackers = state.myCreepUnits.filter(i => i.role === types.ATTACKER);
+
+	healers.forEach(i => {
+		let bestPatient: prototypes.Creep|undefined;
+		let bestScore: number = 0;
+		attackers.forEach(j => {
+			if (mySpawns.find(k => k.x === j.c.x && k.x === j.c.x)) {
+				return;
+			}
+			let dist = utils.getRange(i.c, j.c);
+			let hpPercent = j.c.hits / j.c.hitsMax; 
+			let score = 1.0 / (1.0 + dist * hpPercent);
+			let pair = pairs.get(j.c.id);
+			if (pair === undefined && bestScore < score) {
+				bestScore = score;
+				bestPatient = j.c;
+			}
+		});
+		if (bestPatient !== undefined) {
+			let pair: types.CombatPair  = {
+				attacker: bestPatient,
+				healer: i.c,
+			};
+			pairs.set(bestPatient.id, pair);
+			pairs.set(i.c.id, pair);
+		}
+	});
+
+	return pairs;
 }

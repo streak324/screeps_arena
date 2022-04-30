@@ -77,9 +77,6 @@ export function loop(): void {
 			assignedConstructions: new Map(),
 			creepsTargets: new Map(),
 			creepsPaths: new Map(),
-			combatPairCounter: 0,
-			combatPairs: new Array(),
-			creepIdToCombatPair: new Map(),
 			newCreepUnits: new Array(),
 			myCreepUnits: new Array(),
 		};
@@ -110,21 +107,28 @@ export function loop(): void {
 
 	let numHaulers = state.myCreepUnits.filter(i => i.role === types.HAULER).length;
 	let numWorkers = state.myCreepUnits.filter(i => i.role === types.WORKER).length;
+	let numAttackerCreeps = state.myCreepUnits.filter(i => i.role === types.ATTACKER).length;
+	let numHealerCreeps = state.myCreepUnits.filter(i => i.role === types.HEALER).length;
 
 	if (numHaulers < starterContainers.length) {
 		let creep = mySpawn.spawnCreep([constants.CARRY, constants.MOVE]).object;
 		if (creep !== undefined) {
-			state.newCreepUnits.push({role: types.HAULER, c: creep});
+			state.newCreepUnits.push({role: types.HAULER, c: creep, lastPosition: {x: 0, y: 0}});
 		}
 	} else if (numWorkers < state.desiredMidfieldWorkers) {
 		let creep = mySpawn.spawnCreep([constants.WORK, constants.WORK, constants.CARRY, constants.CARRY, constants.MOVE, constants.MOVE, constants.MOVE, constants.MOVE]).object;
 		if (creep !== undefined) {
-			state.newCreepUnits.push({role: types.WORKER, c: creep});
+			state.newCreepUnits.push({role: types.WORKER, c: creep, lastPosition: {x: 0, y: 0}});
 		}
-	} else {
+	} else if (numAttackerCreeps <= numHealerCreeps) {
 		let creep = mySpawn.spawnCreep([constants.MOVE, constants.ATTACK, constants.MOVE, constants.MOVE, constants.ATTACK, constants.ATTACK]).object;
 		if (creep !== undefined) {
-			state.newCreepUnits.push({role: types.ATTACKER, c: creep});
+			state.newCreepUnits.push({role: types.ATTACKER, c: creep, lastPosition: {x: 0, y: 0}});
+		}
+	} else {
+		let creep = mySpawn.spawnCreep([constants.MOVE, constants.MOVE, constants.MOVE, constants.HEAL]).object;
+		if (creep !== undefined) {
+			state.newCreepUnits.push({role: types.HEALER, c: creep, lastPosition: {x: 0, y: 0}});
 		}
 	}
 
@@ -182,6 +186,7 @@ export function loop(): void {
 		});
 	}
 
+	let combatPairs = military.developCombatPairs(state, mySpawns);
 	state.myCreepUnits.forEach((i, idx) => {
 		if(mySpawns.find(j => j.x === i.c.x && j.y === i.c.y)) {
 			return;
@@ -210,7 +215,15 @@ export function loop(): void {
 			case types.ATTACKER: {
 				military.runAttackerLogic(i.c, state, costMatrix, mySpawns, enemyCreeps, enemySpawns, enemyRamparts);
 			} break;
+			case types.HEALER: {
+				military.runHealerLogic(i.c, state, costMatrix, combatPairs, mySpawns);
+			} break;
 		}
+
+		i.lastPosition = {
+			x: i.c.x,
+			y: i.c.y,
+		};
 	});
 
 	if (state.debug) {

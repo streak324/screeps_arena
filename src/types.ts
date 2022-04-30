@@ -7,29 +7,33 @@ export type Target = {
 	y: number,
 };
 
+//combat pairs are solely attacker to medics.
 export type CombatPair = {
-	id: number
-	attacker: prototypes.Id<prototypes.Creep>|undefined
-	healer: prototypes.Id<prototypes.Creep>|undefined
+	attacker: prototypes.Creep
+	healer: prototypes.Creep
 };
 
 export type HAULER = 1;
 export type WORKER = 2;
 export type ATTACKER = 3;
+export type HEALER = 4;
 
 export const HAULER: HAULER = 1;
 export const WORKER: WORKER = 2;
 export const ATTACKER: ATTACKER = 3;
+export const HEALER: HEALER = 4;
 
 export type CreepRole = 
 	HAULER |
 	WORKER |
-	ATTACKER
+	ATTACKER |
+	HEALER
 ;
 
 export type CreepUnit = {
 	role: CreepRole,
 	c: prototypes.Creep,
+	lastPosition: prototypes.RoomPosition,
 }
 
 export type State = {
@@ -43,9 +47,6 @@ export type State = {
 	assignedConstructions: Map<prototypes.Id<prototypes.Creep>, prototypes.ConstructionSite>,
 	creepsTargets: Map<prototypes.Id<prototypes.Creep>, Target>,
 	creepsPaths: Map<prototypes.Id<prototypes.Creep>, prototypes.RoomPosition[]>
-	combatPairCounter: number,
-	combatPairs: Array<CombatPair>,
-	creepIdToCombatPair: Map<prototypes.Id<prototypes.Creep>, CombatPair>,
 	newCreepUnits: Array<CreepUnit>,
 	myCreepUnits: Array<CreepUnit>,
 };
