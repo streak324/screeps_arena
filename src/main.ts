@@ -1,8 +1,6 @@
 //make sure todo list order is based on implementation priority
-//TODO: pair up attackers with healers
 //TODO: add enemy avoidance mechanisms 
 //TODO: setup ranger patrols in midfield for skirmishing
-//TODO: improve midfield energy utilization
 //TODO: breakup code into separate files
 //TODO: add haulers to aid midfield worker
 //TODO: identify camps for creep squads to form.
@@ -74,12 +72,19 @@ export function loop(): void {
 			maxWallTimeMS: 0.0,
 			maxWallTimeTick: 1,
 			desiredMidfieldWorkers: 1,
+			desiredHaulers: 3,
+			haulerBody: [constants.CARRY, constants.MOVE],
 			assignedConstructions: new Map(),
 			creepsTargets: new Map(),
 			creepsPaths: new Map(),
 			newCreepUnits: new Array(),
 			myCreepUnits: new Array(),
 		};
+	} else if (utils.getTicks() > 150) {
+		state.desiredMidfieldWorkers = 2;
+	} else if (utils.getTicks() > 180) {
+		state.desiredHaulers = 4;
+		state.haulerBody = [constants.CARRY, constants.CARRY, constants.MOVE, constants.MOVE];
 	}
 
 
@@ -110,8 +115,8 @@ export function loop(): void {
 	let numAttackerCreeps = state.myCreepUnits.filter(i => i.role === types.ATTACKER).length;
 	let numHealerCreeps = state.myCreepUnits.filter(i => i.role === types.HEALER).length;
 
-	if (numHaulers < starterContainers.length) {
-		let creep = mySpawn.spawnCreep([constants.CARRY, constants.MOVE]).object;
+	if (numHaulers < state.desiredHaulers) {
+		let creep = mySpawn.spawnCreep(state.haulerBody).object;
 		if (creep !== undefined) {
 			state.newCreepUnits.push({role: types.HAULER, c: creep, lastPosition: {x: 0, y: 0}});
 		}
@@ -132,7 +137,7 @@ export function loop(): void {
 		}
 	}
 
-	let midfieldContainers = utils.getObjectsByPrototype(prototypes.StructureContainer).filter(i => (i.x > 18 && i.x < 82 && i.y > 20 && i.y < 80));
+	let midfieldContainers = utils.getObjectsByPrototype(prototypes.StructureContainer).filter(i => (i.x > 18 && i.x < 82 && i.y > 19 && i.y < 83 && i.store.getUsedCapacity(constants.RESOURCE_ENERGY)));
 	let resources = utils.getObjectsByPrototype(prototypes.Resource);
 	let myExtensions = utils.getObjectsByPrototype(prototypes.StructureExtension).filter(i => i.my);
 
@@ -205,12 +210,13 @@ export function loop(): void {
 			return;
 		}
 
+		let deposits: Array<types.ResourceDeposit> = new Array(...mySpawns, ...myExtensions);
 		switch (i.role) {
 			case types.HAULER: {
-				hauler.runLogic(i.c, idx, state, starterContainers, mySpawn);
+				hauler.runLogic(i.c, state, starterContainers, midfieldContainers, deposits, costMatrix);
 			} break;
 			case types.WORKER: {
-				midfieldworker.runLogic(i.c, idx, state, resources, myExtensions, midfieldContainers, enemyCreeps);
+				midfieldworker.runLogic(i.c, idx, state, resources, myExtensions, midfieldContainers, enemyCreeps, costMatrix);
 			} break;
 			case types.ATTACKER: {
 				military.runAttackerLogic(i.c, state, costMatrix, mySpawns, enemyCreeps, enemySpawns, enemyRamparts);

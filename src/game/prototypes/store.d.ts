@@ -19,7 +19,7 @@ declare module "game/prototypes" {
     /**
      * Returns free capacity for the store. For a limited store, it returns the capacity available for the specified resource if `resource` is defined and valid for this store.
      * @param resource The type of the resource.
-     * @returns Returns available capacity number, or `null` in case of an invalid `resource` for this store type.
+     * @returns Returns available capacity number, or `undefined` in case of an invalid `resource` for this store type.
      */
     getFreeCapacity(resource?: ResourceConstant): number | null;
   }

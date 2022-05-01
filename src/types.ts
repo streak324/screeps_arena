@@ -1,4 +1,4 @@
-import { prototypes, visual} from "game";
+import { prototypes, visual, constants } from "game";
 import { Creep } from "game/prototypes";
 
 export type Target = {
@@ -36,6 +36,11 @@ export type CreepUnit = {
 	lastPosition: prototypes.RoomPosition,
 }
 
+export type ResourceDeposit = 
+	prototypes.StructureSpawn |
+	prototypes.StructureExtension
+;
+
 export type State = {
 	debug: boolean,
 	containerToHauler: Map<prototypes.Id<prototypes.StructureContainer>, prototypes.Creep>,
@@ -44,6 +49,8 @@ export type State = {
 	maxWallTimeMS: number,
 	maxWallTimeTick: number,
 	desiredMidfieldWorkers: number,
+	desiredHaulers: number,
+	haulerBody: constants.BodyPartConstant[],
 	assignedConstructions: Map<prototypes.Id<prototypes.Creep>, prototypes.ConstructionSite>,
 	creepsTargets: Map<prototypes.Id<prototypes.Creep>, Target>,
 	creepsPaths: Map<prototypes.Id<prototypes.Creep>, prototypes.RoomPosition[]>

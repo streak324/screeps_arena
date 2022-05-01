@@ -1,7 +1,9 @@
 import { prototypes, visual, constants, utils} from "game";
+import { CostMatrix } from "game/path-finder";
 import * as types from "types";
+import * as pathutils from "./pathutils";
 
-export function runLogic(creep: prototypes.Creep, idx: number, state: types.State, resources: prototypes.Resource[], myExtensions: prototypes.StructureExtension[], midfieldContainers: prototypes.StructureContainer[], enemyCreeps: prototypes.Creep[]) {
+export function runLogic(creep: prototypes.Creep, idx: number, state: types.State, resources: prototypes.Resource[], myExtensions: prototypes.StructureExtension[], midfieldContainers: prototypes.StructureContainer[], enemyCreeps: prototypes.Creep[], costMatrix: CostMatrix) {
 	let container = state.haulerToContainer.get(creep.id);
 
 	let resource = creep.findClosestByRange(resources);
@@ -133,7 +135,7 @@ export function runLogic(creep: prototypes.Creep, idx: number, state: types.Stat
 	}
 
 	if (availCap != undefined && availCap > 0) {
-		let status = creep.withdraw(container, constants.RESOURCE_ENERGY)
+		let status = creep.withdraw(container, constants.RESOURCE_ENERGY);
 		if (status === undefined) {
 			console.log(creep.id, "got undefined withdraw status from container",container.id);
 			return;
