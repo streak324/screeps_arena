@@ -2,8 +2,8 @@
 import { prototypes, visual, constants, utils} from "game";
 import { State, UnitCluster } from "types";
 
-//the squared value of the max tiles that an archer can reach
-const MIN_CLUSTER_RANGE = 3;
+//the squared value of the max tiles that an archer can reach, plus one tile for move
+const MIN_CLUSTER_RANGE = 5;
 
 export function predictEnemy(e: prototypes.StructureSpawn|prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart, state: State, enemyLabelViz: visual.Visual, enemyClusters: Array<UnitCluster>) {
 	if (state.debug) {
@@ -27,18 +27,20 @@ export function predictEnemy(e: prototypes.StructureSpawn|prototypes.Creep|proto
 				break;
 				case constants.RANGED_ATTACK:
 					rangePartCnt++;
-					mass += 1;
 				break;
 				case constants.HEAL:
 					healPartCnt++;
-					mass += 1;
 				break;
 				case constants.MOVE:
-					mass += 1;
 				break;
 			};
 		});
+
+		// numMove => relieved fatigue. (totalParts - numMove) * 5 => generated fatigue
+		let generatedFatigue = (e.body.length - movePartCnt) * 5;
+		mass = 1.0 + 2*Math.min(1.0, rangePartCnt) + Math.min(1.0, healPartCnt) + 2*Math.min(1.0, movePartCnt / Math.max(1.0, generatedFatigue));
 		unitPower = 3*attackPartCnt + rangePartCnt * movePartCnt + healPartCnt * movePartCnt;
+
 	} else if (e instanceof prototypes.StructureRampart) {
 		unitPower = 20;
 	} else if (e instanceof prototypes.StructureTower) {
@@ -53,12 +55,11 @@ export function predictEnemy(e: prototypes.StructureSpawn|prototypes.Creep|proto
 		mass = 2;
 	}
 
-	const MIN_UNIT_DENSITY = 0.8;
-
 	let bestCluster: UnitCluster | undefined;
 	let highestDensity = 0.0;
 	enemyClusters.forEach(cluster => {
-		if (e.x >= cluster.min.x-MIN_CLUSTER_RANGE && e.x <= cluster.max.x + MIN_CLUSTER_RANGE && e.y >= cluster.min.y-MIN_CLUSTER_RANGE && e.y <= cluster.max.y + MIN_CLUSTER_RANGE) {
+		//check if enemy is overlapping with the cluster bounds, 
+		if (e.x >= cluster.centerMass.x-MIN_CLUSTER_RANGE && e.x <= cluster.centerMass.x + MIN_CLUSTER_RANGE && e.y >= cluster.centerMass.y-MIN_CLUSTER_RANGE && e.y <= cluster.centerMass.y + MIN_CLUSTER_RANGE) {
 			let newMax: prototypes.RoomPosition = {
 				x: Math.max(e.x, cluster.max.x),
 				y: Math.max(e.y, cluster.max.y),
@@ -72,23 +73,21 @@ export function predictEnemy(e: prototypes.StructureSpawn|prototypes.Creep|proto
 			let newMass = cluster.mass + mass;
 
 			let density  = newMass / newArea;
-			if (density > MIN_UNIT_DENSITY && highestDensity < density) {
+			if (highestDensity < density) {
 				bestCluster = cluster; 
 			}
+		} else if (e.x >= cluster.min.x-MIN_CLUSTER_RANGE && e.x <= cluster.max.x + MIN_CLUSTER_RANGE && e.y >= cluster.min.y-MIN_CLUSTER_RANGE && e.y <= cluster.max.y + MIN_CLUSTER_RANGE) {
+			//TODO: breakup cluster when enemy is within bounds, but not within center of mass
 		}
 	});
 
 	if (bestCluster === undefined) {
+		let pos: prototypes.RoomPosition = { x: e.x, y: e.y };
 		let newCluster: UnitCluster = {
 			id: enemyClusters.length,
-			min: {
-				x: e.x,
-				y: e.y,
-			},
-			max: {
-				x: e.x,
-				y: e.y,
-			},
+			min: pos,
+			max: pos,
+			centerMass: pos,
 			power: unitPower,
 			units: new Array(e),
 			mass: mass,
@@ -107,6 +106,17 @@ export function predictEnemy(e: prototypes.StructureSpawn|prototypes.Creep|proto
 		bestCluster.min = newMin;
 		bestCluster.power += unitPower;
 		bestCluster.mass += mass;
+		let ratio = 1.0/(bestCluster.units.length + 1.0);
+		let sumX = e.x;
+		let sumY = e.y;
+		bestCluster.units.forEach(i => {
+			sumX += i.x;
+			sumY += i.y;
+		});
+		bestCluster.centerMass = {
+			x: sumX * ratio,
+			y: sumY * ratio,
+		};
 		bestCluster.units.push(e);
 		return bestCluster;
 	}

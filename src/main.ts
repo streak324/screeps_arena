@@ -1,20 +1,16 @@
 //make sure todo list order is based on implementation priority
-//TODO: add enemy avoidance mechanisms 
-//TODO: setup ranger patrols in midfield for skirmishing
-//TODO: breakup code into separate files
-//TODO: add haulers to aid midfield worker
-//TODO: identify camps for creep squads to form.
+//TODO: improve algorithm for identifying creep clusters, and measuring power.
+//TODO: avoid creeps from enemy clusters unless stronger
+//TODO: allow multiple healers to heal the same creep
+//TODO: add simple kiting mechanisms
+//TODO: add rangers w/ simple kiting
 //TODO: select creeps to be in squads
-//TODO: implement healer logic into squads
-//TODO: add rangers with basic kiting
 //TODO: move squads in unison to spawn
 //TODO: add retreat mechanisms
 //TODO: allow squads to breakup to do skirmishing
 //TODO: adjust behavior of squads against enemy clusters based on cluster's strength
-//TODO: compare logistical/terrain advantage b/w squads and enemy clusters
 //TODO: determine attack priority of individuals in enemy cluster.
-//TODO: improve algorithm for identifying clusters of enemies. ideas: DBSCAN (Density-Based Spatial Clustering of Applications with Noise)
-//TODO: implement ramparts for use by squads
+//TODO: build and use ramparts
 
 import { utils, prototypes, constants, visual, arenaInfo } from "game";
 import { CostMatrix } from "game/path-finder";
@@ -171,6 +167,13 @@ export function loop(): void {
 			enemyLabelViz.rect(topleftpad, cluster.max.x - cluster.min.x+3, cluster.max.y - cluster.min.y+3, padStyle);
 			enemyLabelViz.rect(topleft, cluster.max.x - cluster.min.x+1, cluster.max.y - cluster.min.y+1, style);
 
+			let centerCircleStyle: CircleStyle = {
+				radius: 0.2,
+				opacity: 1.0,
+				fill: "#0f0f0f",
+			}
+			enemyLabelViz.circle(cluster.centerMass, centerCircleStyle);
+
 			let textStyle: TextStyle = {
 				font: 0.7,
 				color: "#ffffff",
@@ -188,6 +191,7 @@ export function loop(): void {
 				y: cluster.min.y-1,
 			} 
 			enemyLabelViz.text(text, centerTop, textStyle);
+			console.log(cluster.id, cluster.centerMass);
 		});
 	}
 

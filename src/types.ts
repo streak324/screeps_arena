@@ -63,8 +63,9 @@ export type State = {
 export interface UnitCluster {
 	id: number,
 	power: number,
-	units: Array<UnitCluster|prototypes.StructureSpawn|prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart>,
+	units: Array<prototypes.StructureSpawn|prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart>,
 	min: prototypes.RoomPosition,
 	max: prototypes.RoomPosition,
+	centerMass: prototypes.RoomPosition,
 	mass: number,
 }
