@@ -36,6 +36,19 @@ export type CreepUnit = {
 	lastPosition: prototypes.RoomPosition,
 }
 
+export type CreepUnitStats = {
+	range: number,
+	attackPower: number,
+	healPower: number,
+	//tiles per tick
+	moveSpeed: number,
+}
+
+export type UnitPowerRange = {
+	power: number,
+	range: number,
+}
+
 export type ResourceDeposit = 
 	prototypes.StructureSpawn |
 	prototypes.StructureExtension
@@ -66,6 +79,5 @@ export interface UnitCluster {
 	units: Array<prototypes.StructureSpawn|prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart>,
 	min: prototypes.RoomPosition,
 	max: prototypes.RoomPosition,
-	centerMass: prototypes.RoomPosition,
-	mass: number,
+	centerPower: prototypes.RoomPosition,
 }

@@ -172,7 +172,8 @@ export function loop(): void {
 				opacity: 1.0,
 				fill: "#0f0f0f",
 			}
-			enemyLabelViz.circle(cluster.centerMass, centerCircleStyle);
+			console.log(cluster.centerPower);
+			enemyLabelViz.circle(cluster.centerPower, centerCircleStyle);
 
 			let textStyle: TextStyle = {
 				font: 0.7,
@@ -185,13 +186,12 @@ export function loop(): void {
 			});
 			text +="\nPower: " + cluster.power;
 			text += "\nArea: " + (cluster.max.x - cluster.min.x + 1) * (cluster.max.y - cluster.min.y + 1); 
-			text += "\nMass: " + cluster.mass; 
 			let centerTop: prototypes.RoomPosition = {
 				x: cluster.min.x + (cluster.max.x - cluster.min.x) / 2,
 				y: cluster.min.y-1,
 			} 
 			enemyLabelViz.text(text, centerTop, textStyle);
-			console.log(cluster.id, cluster.centerMass);
+			console.log(cluster.id, cluster.centerPower);
 		});
 	}
 

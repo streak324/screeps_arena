@@ -1,11 +1,8 @@
 
 import { prototypes, visual, constants, utils} from "game";
-import { State, UnitCluster } from "types";
+import * as types from "./types";
 
-//the squared value of the max tiles that an archer can reach, plus one tile for move
-const MIN_CLUSTER_RANGE = 5;
-
-export function predictEnemy(e: prototypes.StructureSpawn|prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart, state: State, enemyLabelViz: visual.Visual, enemyClusters: Array<UnitCluster>) {
+export function predictEnemy(e: prototypes.StructureSpawn|prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart, state: types.State, enemyLabelViz: visual.Visual, enemyClusters: Array<types.UnitCluster>) {
 	if (state.debug) {
 		let style: TextStyle = {
 			font: 0.7,
@@ -13,84 +10,40 @@ export function predictEnemy(e: prototypes.StructureSpawn|prototypes.Creep|proto
 		}
 		enemyLabelViz.text("e" + e.id, e, style);
 	}
-	let unitPower = 0;
-	let mass = 1;
-	if (e instanceof prototypes.Creep) {
-		let rangePartCnt = 0;
-		let attackPartCnt = 0;
-		let healPartCnt = 0;
-		let movePartCnt = 0;
-		e.body.forEach(p => {
-			switch (p.type) {
-				case constants.ATTACK:
-					attackPartCnt++;
-				break;
-				case constants.RANGED_ATTACK:
-					rangePartCnt++;
-				break;
-				case constants.HEAL:
-					healPartCnt++;
-				break;
-				case constants.MOVE:
-				break;
-			};
-		});
 
-		// numMove => relieved fatigue. (totalParts - numMove) * 5 => generated fatigue
-		let generatedFatigue = (e.body.length - movePartCnt) * 5;
-		mass = 1.0 + 2*Math.min(1.0, rangePartCnt) + Math.min(1.0, healPartCnt) + 2*Math.min(1.0, movePartCnt / Math.max(1.0, generatedFatigue));
-		unitPower = 3*attackPartCnt + rangePartCnt * movePartCnt + healPartCnt * movePartCnt;
+	let powerAndRange = getUnitPowerAndRange(e);
 
-	} else if (e instanceof prototypes.StructureRampart) {
-		unitPower = 20;
-	} else if (e instanceof prototypes.StructureTower) {
-		unitPower = 20;
-		mass = 4;
-	} else if (e instanceof prototypes.StructureSpawn) {
-		let cap = e.store.getCapacity(constants.RESOURCE_ENERGY);
-		let usedCap = e.store.getUsedCapacity(constants.RESOURCE_ENERGY);
-		if (cap != undefined && usedCap != undefined) {
-			unitPower = 30*usedCap/cap;
-		}
-		mass = 2;
-	}
-
-	let bestCluster: UnitCluster | undefined;
-	let highestDensity = 0.0;
+	let bestCluster: types.UnitCluster | undefined;
+	let bestDist: number = 9999999;
 	enemyClusters.forEach(cluster => {
 		//check if enemy is overlapping with the cluster bounds, 
-		if (e.x >= cluster.centerMass.x-MIN_CLUSTER_RANGE && e.x <= cluster.centerMass.x + MIN_CLUSTER_RANGE && e.y >= cluster.centerMass.y-MIN_CLUSTER_RANGE && e.y <= cluster.centerMass.y + MIN_CLUSTER_RANGE) {
-			let newMax: prototypes.RoomPosition = {
-				x: Math.max(e.x, cluster.max.x),
-				y: Math.max(e.y, cluster.max.y),
-			};
-			let newMin: prototypes.RoomPosition = {
-				x: Math.min(e.x, cluster.min.x),
-				y: Math.min(e.y, cluster.min.y),
-			};
-
-			let newArea = (newMax.x - newMin.x + 1) * (newMax.y - newMin.y + 1);
-			let newMass = cluster.mass + mass;
-
-			let density  = newMass / newArea;
-			if (highestDensity < density) {
+		let closestUnit = e.findClosestByRange(cluster.units);
+		if (closestUnit == undefined) {
+			console.log("cluster", cluster.id, "has no units. wtf");
+			return;
+		}
+		let maxRange = getUnitPowerAndRange(closestUnit).range + powerAndRange.range;
+		
+		if (e.x >= cluster.centerPower.x-powerAndRange.range && e.x <= cluster.centerPower.x + powerAndRange.range && e.y >= cluster.centerPower.y-powerAndRange.range && e.y <= cluster.centerPower.y + powerAndRange.range) {
+			let dist = e.getRangeTo(cluster.centerPower); 
+			if (bestCluster === undefined || dist < bestDist) {
 				bestCluster = cluster; 
+				bestDist = dist;
 			}
-		} else if (e.x >= cluster.min.x-MIN_CLUSTER_RANGE && e.x <= cluster.max.x + MIN_CLUSTER_RANGE && e.y >= cluster.min.y-MIN_CLUSTER_RANGE && e.y <= cluster.max.y + MIN_CLUSTER_RANGE) {
+		} else if (e.x >= closestUnit.x-maxRange && e.x <= closestUnit.x + maxRange && e.y >= closestUnit.y-maxRange && e.y <= closestUnit.y + maxRange) {
 			//TODO: breakup cluster when enemy is within bounds, but not within center of mass
 		}
 	});
 
 	if (bestCluster === undefined) {
 		let pos: prototypes.RoomPosition = { x: e.x, y: e.y };
-		let newCluster: UnitCluster = {
+		let newCluster: types.UnitCluster = {
 			id: enemyClusters.length,
 			min: pos,
 			max: pos,
-			centerMass: pos,
-			power: unitPower,
+			centerPower: pos,
+			power: powerAndRange.power,
 			units: new Array(e),
-			mass: mass,
 		}
 		enemyClusters.push(newCluster);
 	} else {
@@ -104,20 +57,74 @@ export function predictEnemy(e: prototypes.StructureSpawn|prototypes.Creep|proto
 		};
 		bestCluster.max = newMax;
 		bestCluster.min = newMin;
-		bestCluster.power += unitPower;
-		bestCluster.mass += mass;
-		let ratio = 1.0/(bestCluster.units.length + 1.0);
-		let sumX = e.x;
-		let sumY = e.y;
-		bestCluster.units.forEach(i => {
-			sumX += i.x;
-			sumY += i.y;
-		});
-		bestCluster.centerMass = {
-			x: sumX * ratio,
-			y: sumY * ratio,
+		bestCluster.power += powerAndRange.power;
+		let weight = (1.0 + powerAndRange.power)/(1.0 + bestCluster.power + powerAndRange.power);
+		bestCluster.centerPower = {
+			x: (1 - weight) * bestCluster.centerPower.x + weight * e.x,
+			y: (1 - weight) * bestCluster.centerPower.y + weight * e.y,
 		};
 		bestCluster.units.push(e);
 		return bestCluster;
 	}
+}
+
+function getCreepUnitStats(i: prototypes.Creep): types.CreepUnitStats{
+	let rangePartCnt = 0;
+	let attackPartCnt = 0;
+	let healPartCnt = 0;
+	let movePartCnt = 0;
+	i.body.forEach(p => {
+		switch (p.type) {
+			case constants.ATTACK:
+				attackPartCnt++;
+			break;
+			case constants.RANGED_ATTACK:
+				rangePartCnt++;
+			break;
+			case constants.HEAL:
+				healPartCnt++;
+			break;
+			case constants.MOVE:
+				movePartCnt +=1;
+			break;
+		};
+	});
+
+	// numMove => relieved fatigue. (totalParts - numMove) * 5 => generated fatigue
+	let generatedFatigue = (i.body.length - movePartCnt) * 5;
+	let stats: types.CreepUnitStats = {
+		range: 2.0 + 2.0 * Math.max(Math.min(1.0, rangePartCnt) + Math.min(1.0, healPartCnt)) + Math.min(1.0, movePartCnt / Math.max(1.0, generatedFatigue)),
+		attackPower: 30 * attackPartCnt + 10 * rangePartCnt,
+		healPower: 12 * healPartCnt,
+		moveSpeed: Math.min(1.0, movePartCnt / Math.max(generatedFatigue)),
+	};
+	return stats;
+}
+
+function getUnitPowerAndRange(e: prototypes.StructureSpawn|prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart): types.UnitPowerRange {
+	let unitPower = 0;
+	let range = 1;
+	if (e instanceof prototypes.Creep) {
+		let stats = getCreepUnitStats(e);
+		range = stats.range;
+		unitPower = stats.attackPower + stats.healPower;
+	} else if (e instanceof prototypes.StructureRampart) {
+		unitPower = 20;
+	} else if (e instanceof prototypes.StructureTower) {
+		unitPower = 20;
+		range = 50;
+	} else if (e instanceof prototypes.StructureSpawn) {
+		let cap = e.store.getCapacity(constants.RESOURCE_ENERGY);
+		let usedCap = e.store.getUsedCapacity(constants.RESOURCE_ENERGY);
+		if (cap != undefined && usedCap != undefined) {
+			unitPower = 30*usedCap/cap;
+		}
+		range = 2;
+	}
+
+	let powerRange: types.UnitPowerRange = {
+		power: unitPower,
+		range: range,
+	};
+	return powerRange;
 }
