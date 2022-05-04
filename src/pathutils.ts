@@ -62,7 +62,7 @@ export function moveCreepToTarget(creep: prototypes.Creep, target: types.Target,
 		costMatrix.set(creep.x, creep.y, 0);
 		costMatrix.set(bestTile.x, bestTile.y, 255);
 	} else {
-		console.log("ERROR. UNABLE TO SET GET TILE. RE-EVALUATING");
+		console.log(creep.id, "ERROR. UNABLE TO SET GET TILE. RE-EVALUATING");
 		state.creepsPaths.delete(creep.id);
 	}
 }

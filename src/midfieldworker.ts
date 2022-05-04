@@ -42,7 +42,6 @@ export function runLogic(creep: prototypes.Creep, idx: number, state: types.Stat
 						continue;
 					}
 					let res = utils.createConstructionSite({x: creep.x +x, y: creep.y + y}, prototypes.StructureExtension);
-					console.log(res);
 					if (res.object !== undefined) {
 						construction = res.object;
 						state.assignedConstructions.set(creep.id, res.object);

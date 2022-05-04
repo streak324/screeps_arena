@@ -16,7 +16,7 @@ import { utils, prototypes, constants, visual, arenaInfo } from "game";
 import { CostMatrix } from "game/path-finder";
 import * as hauler from "./hauler";
 import * as midfieldworker from "./midfieldworker";
-import * as enemy from "./enemy";
+import * as clustering from "./clustering";
 import * as types from "./types";
 import * as military from "./military";
 
@@ -140,62 +140,12 @@ export function loop(): void {
 	//clustering enemies
 	let enemyClusters = new Array<types.UnitCluster>();
 	let enemies = new Array<prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart|prototypes.StructureSpawn>(...enemySpawns, ...enemyCreeps, ...enemyRamparts, ...enemyTowers,);
-	let enemyLabelViz = new visual.Visual(2, false);
+	let creepViz = new visual.Visual(2, false);
 	enemies.forEach(e => {
-		enemy.predictEnemy(e, state, enemyLabelViz, enemyClusters);
+		clustering.putIntoCluster(e, state, creepViz, enemyClusters);
 	});
 
-	if (state.debug) {
-		enemyClusters.forEach(cluster => {
-			let topleft: prototypes.RoomPosition = {
-				x: cluster.min.x-0.5,
-				y: cluster.min.y-0.5,
-			}
-			let topleftpad: prototypes.RoomPosition = {
-				x: cluster.min.x-1.5,
-				y: cluster.min.y-1.5,
-			}
-			let style: PolyStyle = {
-				fill: "#ff0000",
-				lineStyle: "solid",
-			}
-			let padStyle: PolyStyle = {
-				fill: "#ffffff",
-				lineStyle: "solid",
-				opacity: 0.2,
-			}
-			enemyLabelViz.rect(topleftpad, cluster.max.x - cluster.min.x+3, cluster.max.y - cluster.min.y+3, padStyle);
-			enemyLabelViz.rect(topleft, cluster.max.x - cluster.min.x+1, cluster.max.y - cluster.min.y+1, style);
-
-			let centerCircleStyle: CircleStyle = {
-				radius: 0.2,
-				opacity: 1.0,
-				fill: "#0f0f0f",
-			}
-			console.log(cluster.centerPower);
-			enemyLabelViz.circle(cluster.centerPower, centerCircleStyle);
-
-			let textStyle: TextStyle = {
-				font: 0.7,
-				color: "#ffffff",
-				backgroundColor: "#80808080",
-			}
-			let text = "EC" + cluster.id + ": ";
-			cluster.units.forEach(e => {
-				text += e.id + ", ";
-			});
-			text +="\nPower: " + cluster.power;
-			text += "\nArea: " + (cluster.max.x - cluster.min.x + 1) * (cluster.max.y - cluster.min.y + 1); 
-			let centerTop: prototypes.RoomPosition = {
-				x: cluster.min.x + (cluster.max.x - cluster.min.x) / 2,
-				y: cluster.min.y-1,
-			} 
-			enemyLabelViz.text(text, centerTop, textStyle);
-			console.log(cluster.id, cluster.centerPower);
-		});
-	}
-
-	let combatPairs = military.developCombatPairs(state, mySpawns);
+	let myUnitClusters = new Array<types.UnitCluster>();
 	state.myCreepUnits.forEach((i, idx) => {
 		if(mySpawns.find(j => j.x === i.c.x && j.y === i.c.y)) {
 			return;
@@ -213,7 +163,16 @@ export function loop(): void {
 			state.assignedConstructions.delete(i.c.id);
 			return;
 		}
+		clustering.putIntoCluster(i.c, state, creepViz, myUnitClusters);
+	})
 
+	if (state.debug) {
+		clustering.debugDrawClusters(enemyClusters, creepViz, "#ff0000");
+		clustering.debugDrawClusters(myUnitClusters, creepViz, "#0000ff");
+	}
+
+	let combatPairs = military.developCombatPairs(state, mySpawns);
+	state.myCreepUnits.forEach((i, idx) => {
 		let deposits: Array<types.ResourceDeposit> = new Array(...mySpawns, ...myExtensions);
 		switch (i.role) {
 			case types.HAULER: {
