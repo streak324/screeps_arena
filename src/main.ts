@@ -54,6 +54,7 @@ export function loop(): void {
 	let enemyTowers = utils.getObjectsByPrototype(prototypes.StructureTower).filter(i => !i.my);
 	let walls = utils.getObjectsByPrototype(prototypes.StructureWall);
 	let enemyCreeps = allCreeps.filter(creep => !creep.my);
+	let allExtensions = utils.getObjectsByPrototype(prototypes.StructureExtension);
 
 	//WE ARE AT THE START OF THE GAME. DO ALL STATIC COMPUTATION HERE
 	if (utils.getTicks() === 1) {
@@ -80,10 +81,11 @@ export function loop(): void {
 		state.haulerBody = [constants.CARRY, constants.CARRY, constants.MOVE, constants.MOVE];
 	}
 
-
 	let costMatrix = new CostMatrix();
 	allCreeps.forEach(creep => { costMatrix.set(creep.x, creep.y, 255); })
 	allSpawns.forEach(i => { costMatrix.set(i.x, i.y, 255); });
+	walls.forEach(i => { costMatrix.set(i.x, i.y, 255); });
+	allExtensions.forEach(i => { costMatrix.set(i.x, i.y, 255); });
 
 	let creepCampOffset = 4;
 	if (mySpawn.x > SPAWN_SWAMP_BASIC_ARENA_WIDTH/2) {
