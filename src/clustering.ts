@@ -1,6 +1,7 @@
 
 import { prototypes, visual, constants, utils} from "game";
 import * as types from "./types";
+import * as tactics from "./tactics";
 
 export function putIntoCluster(e: prototypes.StructureSpawn|prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart, state: types.State, creepViz: visual.Visual, clusters: Array<types.UnitCluster>) {
 	if (state.debug) {
@@ -11,7 +12,7 @@ export function putIntoCluster(e: prototypes.StructureSpawn|prototypes.Creep|pro
 		creepViz.text("c" + e.id, e, style);
 	}
 
-	let unitStats = getUnitStats(e);
+	let unitStats = tactics.getUnitStats(e);
 
 	let bestCluster: types.UnitCluster | undefined;
 	let bestDist: number = 9999999;
@@ -22,7 +23,7 @@ export function putIntoCluster(e: prototypes.StructureSpawn|prototypes.Creep|pro
 			console.log("cluster", cluster.id, "has no units. wtf");
 			return;
 		}
-		let maxRange = getUnitStats(closestUnit).range + unitStats.range;
+		let maxRange = tactics.getUnitStats(closestUnit).range + unitStats.range;
 		
 		if (e.x >= cluster.centerPower.x-unitStats.range && e.x <= cluster.centerPower.x + unitStats.range && e.y >= cluster.centerPower.y-unitStats.range && e.y <= cluster.centerPower.y + unitStats.range) {
 			let dist = e.getRangeTo(cluster.centerPower); 
@@ -73,106 +74,50 @@ export function putIntoCluster(e: prototypes.StructureSpawn|prototypes.Creep|pro
 }
 
 export function debugDrawClusters(clusters: Array<types.UnitCluster>, creepViz: visual.Visual, colorFill: string) {
-		clusters.forEach(cluster => {
-			let topleft: prototypes.RoomPosition = {
-				x: cluster.min.x-0.5,
-				y: cluster.min.y-0.5,
-			}
-			let topleftpad: prototypes.RoomPosition = {
-				x: cluster.min.x-1.5,
-				y: cluster.min.y-1.5,
-			}
-			let style: PolyStyle = {
-				fill: colorFill,
-				lineStyle: "solid",
-			}
-			let padStyle: PolyStyle = {
-				fill: "#ffffff",
-				lineStyle: "solid",
-				opacity: 0.2,
-			}
-			creepViz.rect(topleftpad, cluster.max.x - cluster.min.x+3, cluster.max.y - cluster.min.y+3, padStyle);
-			creepViz.rect(topleft, cluster.max.x - cluster.min.x+1, cluster.max.y - cluster.min.y+1, style);
-
-			let centerCircleStyle: CircleStyle = {
-				radius: 0.2,
-				opacity: 1.0,
-				fill: "#0f0f0f",
-			}
-			creepViz.circle(cluster.centerPower, centerCircleStyle);
-
-			let textStyle: TextStyle = {
-				font: 0.5,
-				color: "#ffffff",
-				backgroundColor: "#80808080",
-			}
-			let text = "C" + cluster.id + ": ";
-			cluster.units.forEach(e => {
-				text += e.id + ", ";
-			});
-			text +="\nAttack: " + cluster.attackPower;
-			text +="\nHeal: " + cluster.healPower;
-			text +="\nHits: " + cluster.hits;
-			let centerTop: prototypes.RoomPosition = {
-				x: cluster.min.x + (cluster.max.x - cluster.min.x) / 2,
-				y: cluster.min.y-1,
-			} 
-			creepViz.text(text, centerTop, textStyle);
-			console.log(cluster.id, cluster.centerPower);
-		});
-}
-
-function getUnitStats(e: prototypes.StructureSpawn|prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart): types.UnitStats {
-	let stats: types.UnitStats = {
-		attackPower: 0,
-		healPower: 0,
-		range: 1,
-		moveSpeed: 0,
-		hits: e.hits,
-	}
-
-	if (e instanceof prototypes.Creep) {
-		let rangePartCnt = 0;
-		let attackPartCnt = 0;
-		let healPartCnt = 0;
-		let movePartCnt = 0;
-		e.body.forEach(p => {
-			switch (p.type) {
-				case constants.ATTACK:
-					attackPartCnt++;
-				break;
-				case constants.RANGED_ATTACK:
-					rangePartCnt++;
-				break;
-				case constants.HEAL:
-					healPartCnt++;
-				break;
-				case constants.MOVE:
-					movePartCnt +=1;
-				break;
-			};
-		});
-
-		// numMove => relieved fatigue. (totalParts - numMove) * 5 => generated fatigue
-		let generatedFatigue = (e.body.length - movePartCnt) * 5;
-		stats.range = 2.0 + 2.0 * Math.max(Math.min(1.0, rangePartCnt) + Math.min(1.0, healPartCnt)) + Math.min(1.0, movePartCnt / Math.max(1.0, generatedFatigue)),
-		stats.attackPower = constants.ATTACK_POWER * attackPartCnt + constants.RANGED_ATTACK_POWER * rangePartCnt,
-		stats.healPower = constants.HEAL_POWER * healPartCnt,
-		stats.moveSpeed = Math.min(1.0, movePartCnt / Math.max(generatedFatigue));
-	} else if (e instanceof prototypes.StructureRampart) {
-		stats.attackPower = 20;
-		stats.range = 1;
-	} else if (e instanceof prototypes.StructureTower) {
-		stats.attackPower = 15;
-		stats.range = 10;
-	} else if (e instanceof prototypes.StructureSpawn) {
-		let cap = e.store.getCapacity(constants.RESOURCE_ENERGY);
-		let usedCap = e.store.getUsedCapacity(constants.RESOURCE_ENERGY);
-		if (cap != undefined && usedCap != undefined) {
-			stats.attackPower = 30*usedCap/cap;
+	clusters.forEach(cluster => {
+		let topleft: prototypes.RoomPosition = {
+			x: cluster.min.x-0.5,
+			y: cluster.min.y-0.5,
 		}
-		stats.range = 2;
-	}
+		let topleftpad: prototypes.RoomPosition = {
+			x: cluster.min.x-1.5,
+			y: cluster.min.y-1.5,
+		}
+		let style: PolyStyle = {
+			fill: colorFill,
+			lineStyle: "solid",
+		}
+		let padStyle: PolyStyle = {
+			fill: "#ffffff",
+			lineStyle: "solid",
+			opacity: 0.2,
+		}
+		creepViz.rect(topleftpad, cluster.max.x - cluster.min.x+3, cluster.max.y - cluster.min.y+3, padStyle);
+		creepViz.rect(topleft, cluster.max.x - cluster.min.x+1, cluster.max.y - cluster.min.y+1, style);
 
-	return stats;
+		let centerCircleStyle: CircleStyle = {
+			radius: 0.2,
+			opacity: 1.0,
+			fill: "#0f0f0f",
+		}
+		creepViz.circle(cluster.centerPower, centerCircleStyle);
+
+		let textStyle: TextStyle = {
+			font: 0.5,
+			color: "#ffffff",
+			backgroundColor: "#80808080",
+		}
+		let text = "C" + cluster.id + ": ";
+		cluster.units.forEach(e => {
+			text += e.id + ", ";
+		});
+		text +="\nAttack: " + cluster.attackPower;
+		text +="\nHeal: " + cluster.healPower;
+		text +="\nHits: " + cluster.hits;
+		let centerTop: prototypes.RoomPosition = {
+			x: cluster.min.x + (cluster.max.x - cluster.min.x) / 2,
+			y: cluster.min.y-1,
+		} 
+		creepViz.text(text, centerTop, textStyle);
+	});
 }

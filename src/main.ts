@@ -1,14 +1,9 @@
 //make sure todo list order is based on implementation priority
-//TODO: improve algorithm for identifying creep clusters, and measuring power.
-//TODO: avoid creeps from enemy clusters unless stronger
+//TODO: improve predictions on a creep/cluster fight matchup
 //TODO: allow multiple healers to heal the same creep
 //TODO: add simple kiting mechanisms
 //TODO: add rangers w/ simple kiting
-//TODO: select creeps to be in squads
-//TODO: move squads in unison to spawn
-//TODO: add retreat mechanisms
-//TODO: allow squads to breakup to do skirmishing
-//TODO: adjust behavior of squads against enemy clusters based on cluster's strength
+//TODO: improve algorithm for identifying creep clusters, and measuring power.
 //TODO: determine attack priority of individuals in enemy cluster.
 //TODO: build and use ramparts
 
@@ -19,6 +14,8 @@ import * as midfieldworker from "./midfieldworker";
 import * as clustering from "./clustering";
 import * as types from "./types";
 import * as military from "./military";
+import * as tactics from "./tactics";
+import * as pathutils from "./pathutils";
 
 const DIRECTION_ARRAY: constants.DirectionConstant[] = [
 	constants.TOP_LEFT, constants.TOP, constants.TOP_RIGHT,
@@ -173,6 +170,13 @@ export function loop(): void {
 
 	let combatPairs = military.developCombatPairs(state, mySpawns);
 	state.myCreepUnits.forEach((i, idx) => {
+		let fleeResults = tactics.flee(i.c, myUnitClusters, mySpawns, enemyClusters, enemyCreeps);
+		if (fleeResults.ShouldFlee) {
+			console.log("creep", i.c.id, "fleeing to position", fleeResults.FleeTo);
+			i.c.moveTo(fleeResults.FleeTo);
+			return;
+		}
+
 		let deposits: Array<types.ResourceDeposit> = new Array(...mySpawns, ...myExtensions);
 		switch (i.role) {
 			case types.HAULER: {
