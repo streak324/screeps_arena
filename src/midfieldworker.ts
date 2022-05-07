@@ -140,7 +140,7 @@ export function runLogic(creep: prototypes.Creep, idx: number, state: types.Stat
 			return;
 		}
 		if (status === constants.ERR_NOT_IN_RANGE) {
-			creep.moveTo(container);
+			pathutils.moveCreepToTarget(creep, container, costMatrix, state);
 		}
 	}
 }

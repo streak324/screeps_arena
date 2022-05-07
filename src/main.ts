@@ -175,7 +175,7 @@ export function loop(): void {
 		let fleeResults = tactics.flee(i.c, myUnitClusters, mySpawns, enemyClusters, enemyCreeps);
 		if (fleeResults.ShouldFlee) {
 			console.log("creep", i.c.id, "fleeing to position", fleeResults.FleeTo);
-			i.c.moveTo(fleeResults.FleeTo);
+			pathutils.moveCreepToTarget(i.c, { id: "p"+fleeResults.FleeTo.x+","+fleeResults.FleeTo.y,  x: fleeResults.FleeTo.x, y: fleeResults.FleeTo.y}, costMatrix, state);
 			return;
 		}
 

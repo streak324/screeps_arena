@@ -1,10 +1,7 @@
 import { prototypes, visual, constants } from "game";
-import { Creep } from "game/prototypes";
 
-export type Target = {
-	id: prototypes.Id<prototypes.GameObject>	
-	x: number,
-	y: number,
+export interface Target extends prototypes.RoomPosition {
+	id: string	
 };
 
 //combat pairs are solely attacker to medics.
