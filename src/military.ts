@@ -1,10 +1,10 @@
 
 import { prototypes, constants, utils} from "game";
-import { CostMatrix, FindPathOpts } from "game/path-finder";
+import { CostMatrix } from "game/path-finder";
 
 import * as types from "./types";
 import * as pathutils from "./pathutils";
-import { CREEP_SPAWN_TIME } from "game/constants";
+import * as tactics from "./tactics";
 
 export function runAttackerLogic(creep: prototypes.Creep, state: types.State, costMatrix: CostMatrix, mySpawns: prototypes.StructureSpawn[], enemyCreeps: Array<prototypes.Creep>, enemySpawns: prototypes.StructureSpawn[], enemyRamparts: prototypes.StructureRampart[]) {
 	let target: prototypes.Creep | prototypes.Structure | undefined;
@@ -28,19 +28,39 @@ export function runAttackerLogic(creep: prototypes.Creep, state: types.State, co
 	creep.attack(target);
 }
 
-export function runHealerLogic(creep: prototypes.Creep, state: types.State, costMatrix: CostMatrix, combatPairs: Map<prototypes.Id<prototypes.Creep>, types.CombatPair>, mySpawns: prototypes.StructureSpawn[]) {
+export function runHealerLogic(
+	creep: prototypes.Creep, 
+	state: types.State, 
+	costMatrix: CostMatrix, 
+	combatPairs: Map<prototypes.Id<prototypes.Creep>, types.CombatPair>, 
+	mySpawns: prototypes.StructureSpawn[], 
+	myClusters: types.UnitCluster[], 
+	enemyClusters: types.UnitCluster[], 
+	enemyCreeps: prototypes.Creep[]
+) {
 	let pair = combatPairs.get(creep.id);
 	if (pair === undefined) {
 		pathutils.moveCreepToTarget(creep, mySpawns[0], costMatrix, state);
 		return;
 	}
+	let moveToTarget: types.Target = pair.attacker;
+
+	let fleeResults = tactics.flee(creep, myClusters, mySpawns, enemyClusters, enemyCreeps);
+	if (fleeResults.ShouldFlee) {
+		console.log("creep", creep.id, "fleeing to position", fleeResults.FleeTo);
+		moveToTarget = { id: "p"+fleeResults.FleeTo.x+","+fleeResults.FleeTo.y,  x: fleeResults.FleeTo.x, y: fleeResults.FleeTo.y};
+	}
 
 	let patientHPPercent = pair.attacker.hits / pair.attacker.hitsMax;
 	if (patientHPPercent < 1) {
-		pathutils.moveCreepToTarget(creep, pair.attacker, costMatrix, state);
-		creep.heal(pair.attacker);
+		pathutils.moveCreepToTarget(creep, moveToTarget, costMatrix, state);
+		let status = creep.heal(pair.attacker);
+		if (status == constants.ERR_NOT_IN_RANGE) {
+			creep.rangedHeal(pair.attacker);
+		}
 	} else {
 		pathutils.moveCreepToTarget(creep, pair.attacker, costMatrix, state);
+		creep.heal(creep);
 	}
 }
 
