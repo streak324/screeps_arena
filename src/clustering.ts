@@ -43,9 +43,7 @@ export function putIntoCluster(e: prototypes.StructureSpawn|prototypes.Creep|pro
 			min: pos,
 			max: pos,
 			centerPower: pos,
-			attackPower: unitStats.attackPower,
-			healPower: unitStats.healPower,
-			hits: unitStats.hits,
+			stats: unitStats,
 			units: new Array(e),
 		}
 		clusters.push(newCluster);
@@ -60,14 +58,16 @@ export function putIntoCluster(e: prototypes.StructureSpawn|prototypes.Creep|pro
 		};
 		bestCluster.max = newMax;
 		bestCluster.min = newMin;
-		let weight = (1.0 + unitStats.attackPower)/(1.0 + bestCluster.attackPower + unitStats.attackPower);
+		let weight = (1.0 + unitStats.attackPower)/(1.0 + bestCluster.stats.attackPower + unitStats.attackPower);
 		bestCluster.centerPower = {
 			x: (1 - weight) * bestCluster.centerPower.x + weight * e.x,
 			y: (1 - weight) * bestCluster.centerPower.y + weight * e.y,
 		};
-		bestCluster.attackPower += unitStats.attackPower;
-		bestCluster.healPower += unitStats.healPower;
-		bestCluster.hits += unitStats.hits;
+		bestCluster.stats.attackPower += unitStats.attackPower;
+		bestCluster.stats.healPower += unitStats.healPower;
+		bestCluster.stats.hits += unitStats.hits;
+		bestCluster.stats.range = (1 - weight) * bestCluster.stats.range + weight * unitStats.range;
+		bestCluster.stats.moveSpeed = (1 - weight) * bestCluster.stats.moveSpeed + weight * unitStats.moveSpeed;
 		bestCluster.units.push(e);
 		return bestCluster;
 	}
@@ -111,9 +111,11 @@ export function debugDrawClusters(clusters: Array<types.UnitCluster>, creepViz: 
 		cluster.units.forEach(e => {
 			text += e.id + ", ";
 		});
-		text +="\nAttack: " + cluster.attackPower;
-		text +="\nHeal: " + cluster.healPower;
-		text +="\nHits: " + cluster.hits;
+		text +="\nAttack: " + cluster.stats.attackPower;
+		text +="\nHeal: " + cluster.stats.healPower;
+		text +="\nHits: " + cluster.stats.hits;
+		text +="\nRange: " + Math.round(cluster.stats.range*100)/100;
+		text +="\nMove Speed: " + Math.round(cluster.stats.moveSpeed*100)/100;
 		let centerTop: prototypes.RoomPosition = {
 			x: cluster.min.x + (cluster.max.x - cluster.min.x) / 2,
 			y: cluster.min.y-1,

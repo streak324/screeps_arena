@@ -1,4 +1,5 @@
 import { prototypes, constants, utils} from "game";
+import { RoomPosition } from "game/prototypes";
 
 import * as types from "./types";
 
@@ -7,7 +8,7 @@ export type FleeResults = {
 	ShouldFlee: boolean,
 }
 
-const MIN_FLEE_DIST = 7;
+const MIN_FLEE_DIST = 8;
 
 export function flee(creep: prototypes.Creep, myClusters: types.UnitCluster[], mySpawns: prototypes.StructureSpawn[], enemyClusters: types.UnitCluster[], enemies: prototypes.Creep[]): FleeResults {
 	var closestEnemy: prototypes.Creep|undefined;
@@ -33,38 +34,35 @@ export function flee(creep: prototypes.Creep, myClusters: types.UnitCluster[], m
 	let creepCluster = myClusters.find(i => i.units.find(j => j.id == creep.id));
 
 	let enemyStats: types.UnitStats;
+	let enemyPos: RoomPosition;
 
 	if (ec !== undefined) {
-		enemyStats = {
-			range: 0,
-			attackPower: ec.attackPower,
-			healPower: ec.healPower,
-			moveSpeed: 0,
-			hits: ec.hits,
-		};
+		enemyStats = ec.stats;
+		enemyPos = ec.centerPower;
 	} else {
 		console.log("no cluster found for enemy", closestEnemy.id);
 		enemyStats = getUnitStats(closestEnemy);	
+		enemyPos = closestEnemy;
 	}
 
 	let myStats: types.UnitStats;
+	let myPos: RoomPosition;
 
 	if (creepCluster !== undefined) {
-		myStats = {
-			range: 0,
-			attackPower: creepCluster.attackPower,
-			healPower: creepCluster.healPower,
-			moveSpeed: 0,
-			hits: creepCluster.hits,
-		};
+		myStats = creepCluster.stats;
+		myPos = creepCluster.centerPower;
 	} else {
 		console.log("no cluster found for creep", creep.id);
 		myStats = getUnitStats(creep);
+		myPos = creep;
 	}
 
 	//very rough approximation on number of ticks it takes to for one to beat the other.
+	let enemyFreeAttackTicks = enemyStats.range / myStats.moveSpeed;
+	let enemyNetAttack = enemyStats.attackPower - myStats.healPower;
+	console.log(enemyNetAttack);
 	let myScore: number = (myStats.attackPower - enemyStats.healPower) / enemyStats.hits;
-	let enemyScore: number = (enemyStats.attackPower - myStats.healPower) / myStats.hits;
+	let enemyScore: number =  enemyNetAttack / Math.max(1, (myStats.hits - enemyNetAttack * enemyFreeAttackTicks));
 
 	console.log(creep.id, "matchup vs enemy:", myScore, enemyScore);
 
@@ -83,8 +81,9 @@ export function flee(creep: prototypes.Creep, myClusters: types.UnitCluster[], m
 			return;
 		}
 
-		let myScore: number = ((cluster.attackPower + myStats.attackPower) - enemyStats.healPower) / enemyStats.hits;
-		let enemyScore: number = (enemyStats.attackPower - (cluster.healPower + myStats.healPower)) / (cluster.hits + myStats.hits);
+		let enemyNetAttack = enemyStats.attackPower - (cluster.stats.healPower + myStats.healPower);
+		let myScore: number = ((cluster.stats.attackPower + myStats.attackPower) - enemyStats.healPower) / enemyStats.hits;
+		let enemyScore: number = enemyNetAttack / Math.max(1, (cluster.stats.hits + myStats.hits - enemyNetAttack * enemyFreeAttackTicks));
 		if (myScore >= enemyScore) {
 			let dist = creep.getRangeTo(cluster.centerPower);
 			if (fleeToCluster === undefined || dist < clusterDist) {

@@ -70,9 +70,7 @@ export type State = {
 //its bounds will be represented by an axis aligned bounded box
 export interface UnitCluster {
 	id: number,
-	attackPower: number,
-	healPower: number,
-	hits: number,
+	stats: UnitStats,
 	units: Array<prototypes.StructureSpawn|prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart>,
 	min: prototypes.RoomPosition,
 	max: prototypes.RoomPosition,
