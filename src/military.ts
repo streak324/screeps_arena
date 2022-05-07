@@ -9,7 +9,6 @@ import * as tactics from "./tactics";
 export function runAttackerLogic(
 	creep: prototypes.Creep, 
 	state: types.State, 
-	costMatrix: CostMatrix, 
 	mySpawns: prototypes.StructureSpawn[], 
 	enemyCreeps: Array<prototypes.Creep>, 
 	enemySpawns: prototypes.StructureSpawn[], 
@@ -35,11 +34,14 @@ export function runAttackerLogic(
 	}
 
 
+
+	let costMatrix = state.costMatrix;
 	let moveToTarget: types.Target = target;
 	let fleeResults = tactics.flee(creep, myClusters, mySpawns, enemyClusters, enemyCreeps);
 	if (fleeResults.ShouldFlee) {
 		console.log("creep", creep.id, "fleeing to position", fleeResults.FleeTo);
 		moveToTarget = fleeResults.FleeTo;
+		costMatrix = state.fleeCostMatrix;
 	}
 
 	pathutils.moveCreepToTarget(creep, moveToTarget, costMatrix, state);
@@ -49,7 +51,6 @@ export function runAttackerLogic(
 export function runHealerLogic(
 	creep: prototypes.Creep, 
 	state: types.State, 
-	costMatrix: CostMatrix, 
 	combatPairs: Map<prototypes.Id<prototypes.Creep>, types.CombatPair>, 
 	mySpawns: prototypes.StructureSpawn[], 
 	myClusters: types.UnitCluster[], 
@@ -58,15 +59,17 @@ export function runHealerLogic(
 ) {
 	let pair = combatPairs.get(creep.id);
 	if (pair === undefined) {
-		pathutils.moveCreepToTarget(creep, mySpawns[0], costMatrix, state);
+		pathutils.moveCreepToTarget(creep, mySpawns[0], state.costMatrix, state);
 		return;
 	}
 	let moveToTarget: types.Target = pair.attacker;
 
+	let costMatrix = state.costMatrix;
 	let fleeResults = tactics.flee(creep, myClusters, mySpawns, enemyClusters, enemyCreeps);
 	if (fleeResults.ShouldFlee) {
 		console.log("creep", creep.id, "fleeing to position", fleeResults.FleeTo);
 		moveToTarget = fleeResults.FleeTo;
+		costMatrix = state.fleeCostMatrix;
 	}
 
 	let patientHPPercent = pair.attacker.hits / pair.attacker.hitsMax;

@@ -1,4 +1,5 @@
 import { prototypes, visual, constants } from "game";
+import { CostMatrix } from "game/path-finder";
 
 export interface Target extends prototypes.RoomPosition {
 	id: string	
@@ -61,6 +62,8 @@ export type State = {
 	creepsPaths: Map<prototypes.Id<prototypes.Creep>, prototypes.RoomPosition[]>
 	newCreepUnits: Array<CreepUnit>,
 	myCreepUnits: Array<CreepUnit>,
+	costMatrix: CostMatrix,
+	fleeCostMatrix: CostMatrix,
 };
 
 

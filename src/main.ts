@@ -73,6 +73,8 @@ export function loop(): void {
 			creepsPaths: new Map(),
 			newCreepUnits: new Array(),
 			myCreepUnits: new Array(),
+			costMatrix: new CostMatrix(),
+			fleeCostMatrix: new CostMatrix(),
 		};
 	} else if (utils.getTicks() > 150) {
 		state.desiredMidfieldWorkers = 2;
@@ -81,11 +83,22 @@ export function loop(): void {
 		state.haulerBody = [constants.CARRY, constants.CARRY, constants.MOVE, constants.MOVE];
 	}
 
-	let costMatrix = new CostMatrix();
-	allCreeps.forEach(creep => { costMatrix.set(creep.x, creep.y, 255); })
-	allSpawns.forEach(i => { costMatrix.set(i.x, i.y, 255); });
-	walls.forEach(i => { costMatrix.set(i.x, i.y, 255); });
-	allExtensions.forEach(i => { costMatrix.set(i.x, i.y, 255); });
+	state.costMatrix = new CostMatrix();
+	allCreeps.forEach(creep => { state.costMatrix.set(creep.x, creep.y, 255); })
+	allSpawns.forEach(i => { state.costMatrix.set(i.x, i.y, 255); });
+	walls.forEach(i => { state.costMatrix.set(i.x, i.y, 255); });
+	allExtensions.forEach(i => { state.costMatrix.set(i.x, i.y, 255); });
+	state.fleeCostMatrix = state.costMatrix.clone();
+
+	enemyCreeps.forEach(i => { 
+		let stats = tactics.getUnitStats(i); 
+		let range = Math.min(0, Math.ceil(stats.range)-1);
+		for (let dx = -range; dx <= range; dx++) {
+			for (let dy = -range; dy <= range; dy++) {
+				state.fleeCostMatrix.set(i.x + dx, i.y + dy, Math.ceil(128 * Math.abs(Math.max(dx, dy))/range));
+			}
+		}
+	});
 
 	let creepCampOffset = 4;
 	if (mySpawn.x > SPAWN_SWAMP_BASIC_ARENA_WIDTH/2) {
@@ -176,7 +189,7 @@ export function loop(): void {
 			let fleeResults = tactics.flee(i.c, myUnitClusters, mySpawns, enemyClusters, enemyCreeps);
 			if (fleeResults.ShouldFlee) {
 				console.log("creep", i.c.id, "fleeing to position", fleeResults.FleeTo);
-				pathutils.moveCreepToTarget(i.c, fleeResults.FleeTo, costMatrix, state);
+				pathutils.moveCreepToTarget(i.c, fleeResults.FleeTo, state.fleeCostMatrix, state);
 				return;
 			}
 		}
@@ -184,16 +197,16 @@ export function loop(): void {
 		let deposits: Array<types.ResourceDeposit> = new Array(...mySpawns, ...myExtensions);
 		switch (i.role) {
 			case types.HAULER: {
-				hauler.runLogic(i.c, state, starterContainers, midfieldContainers, deposits, costMatrix);
+				hauler.runLogic(i.c, state, starterContainers, midfieldContainers, deposits, state.costMatrix);
 			} break;
 			case types.WORKER: {
-				midfieldworker.runLogic(i.c, idx, state, resources, myExtensions, midfieldContainers, enemyCreeps, costMatrix);
+				midfieldworker.runLogic(i.c, idx, state, resources, myExtensions, midfieldContainers, enemyCreeps, state.costMatrix);
 			} break;
 			case types.ATTACKER: {
-				military.runAttackerLogic(i.c, state, costMatrix, mySpawns, enemyCreeps, enemySpawns, enemyRamparts, myUnitClusters, enemyClusters);
+				military.runAttackerLogic(i.c, state, mySpawns, enemyCreeps, enemySpawns, enemyRamparts, myUnitClusters, enemyClusters);
 			} break;
 			case types.HEALER: {
-				military.runHealerLogic(i.c, state, costMatrix, combatPairs, mySpawns, myUnitClusters, enemyClusters, enemyCreeps);
+				military.runHealerLogic(i.c, state, combatPairs, mySpawns, myUnitClusters, enemyClusters, enemyCreeps);
 			} break;
 		}
 
