@@ -172,11 +172,11 @@ export function loop(): void {
 
 	let combatPairs = military.developCombatPairs(state, mySpawns);
 	state.myCreepUnits.forEach((i, idx) => {
-		if (i.role != types.HEALER) {
+		if (i.role != types.HEALER && i.role != types.ATTACKER) {
 			let fleeResults = tactics.flee(i.c, myUnitClusters, mySpawns, enemyClusters, enemyCreeps);
 			if (fleeResults.ShouldFlee) {
 				console.log("creep", i.c.id, "fleeing to position", fleeResults.FleeTo);
-				pathutils.moveCreepToTarget(i.c, { id: "p"+fleeResults.FleeTo.x+","+fleeResults.FleeTo.y,  x: fleeResults.FleeTo.x, y: fleeResults.FleeTo.y}, costMatrix, state);
+				pathutils.moveCreepToTarget(i.c, fleeResults.FleeTo, costMatrix, state);
 				return;
 			}
 		}
@@ -190,7 +190,7 @@ export function loop(): void {
 				midfieldworker.runLogic(i.c, idx, state, resources, myExtensions, midfieldContainers, enemyCreeps, costMatrix);
 			} break;
 			case types.ATTACKER: {
-				military.runAttackerLogic(i.c, state, costMatrix, mySpawns, enemyCreeps, enemySpawns, enemyRamparts);
+				military.runAttackerLogic(i.c, state, costMatrix, mySpawns, enemyCreeps, enemySpawns, enemyRamparts, myUnitClusters, enemyClusters);
 			} break;
 			case types.HEALER: {
 				military.runHealerLogic(i.c, state, costMatrix, combatPairs, mySpawns, myUnitClusters, enemyClusters, enemyCreeps);

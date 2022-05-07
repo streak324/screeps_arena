@@ -4,7 +4,7 @@ import { RoomPosition } from "game/prototypes";
 import * as types from "./types";
 
 export type FleeResults = {
-	FleeTo: prototypes.RoomPosition,
+	FleeTo: types.Target,
 	ShouldFlee: boolean,
 }
 
@@ -58,7 +58,7 @@ export function flee(creep: prototypes.Creep, myClusters: types.UnitCluster[], m
 	}
 
 	//very rough approximation on number of ticks it takes to for one to beat the other.
-	let enemyFreeAttackTicks = enemyStats.range / myStats.moveSpeed;
+	let enemyFreeAttackTicks = Math.min(0, (enemyStats.range - 1) / myStats.moveSpeed);
 	let enemyNetAttack = enemyStats.attackPower - myStats.healPower;
 	console.log(enemyNetAttack);
 	let myScore: number = (myStats.attackPower - enemyStats.healPower) / enemyStats.hits;
@@ -110,7 +110,7 @@ export function flee(creep: prototypes.Creep, myClusters: types.UnitCluster[], m
 	}
 
 	return {
-		FleeTo: fleeToCluster.centerPower,
+		FleeTo: { id: "my_cluster" + fleeToCluster.id, x: fleeToCluster.centerPower.x, y: fleeToCluster.centerPower.y },
 		ShouldFlee: true,
 	};
 }

@@ -6,7 +6,17 @@ import * as types from "./types";
 import * as pathutils from "./pathutils";
 import * as tactics from "./tactics";
 
-export function runAttackerLogic(creep: prototypes.Creep, state: types.State, costMatrix: CostMatrix, mySpawns: prototypes.StructureSpawn[], enemyCreeps: Array<prototypes.Creep>, enemySpawns: prototypes.StructureSpawn[], enemyRamparts: prototypes.StructureRampart[]) {
+export function runAttackerLogic(
+	creep: prototypes.Creep, 
+	state: types.State, 
+	costMatrix: CostMatrix, 
+	mySpawns: prototypes.StructureSpawn[], 
+	enemyCreeps: Array<prototypes.Creep>, 
+	enemySpawns: prototypes.StructureSpawn[], 
+	enemyRamparts: prototypes.StructureRampart[],
+	myClusters: types.UnitCluster[], 
+	enemyClusters: types.UnitCluster[], 
+) {
 	let target: prototypes.Creep | prototypes.Structure | undefined;
 	let e = creep.findClosestByRange(enemyCreeps);
 	if (e != undefined && utils.getRange(creep, e) < 5 && e.hits > 0 && utils.getRange(e, enemySpawns[0]) > 0.5) {
@@ -24,7 +34,15 @@ export function runAttackerLogic(creep: prototypes.Creep, state: types.State, co
 		return;
 	}
 
-	pathutils.moveCreepToTarget(creep, target, costMatrix, state);
+
+	let moveToTarget: types.Target = target;
+	let fleeResults = tactics.flee(creep, myClusters, mySpawns, enemyClusters, enemyCreeps);
+	if (fleeResults.ShouldFlee) {
+		console.log("creep", creep.id, "fleeing to position", fleeResults.FleeTo);
+		moveToTarget = fleeResults.FleeTo;
+	}
+
+	pathutils.moveCreepToTarget(creep, moveToTarget, costMatrix, state);
 	creep.attack(target);
 }
 
@@ -48,7 +66,7 @@ export function runHealerLogic(
 	let fleeResults = tactics.flee(creep, myClusters, mySpawns, enemyClusters, enemyCreeps);
 	if (fleeResults.ShouldFlee) {
 		console.log("creep", creep.id, "fleeing to position", fleeResults.FleeTo);
-		moveToTarget = { id: "p"+fleeResults.FleeTo.x+","+fleeResults.FleeTo.y,  x: fleeResults.FleeTo.x, y: fleeResults.FleeTo.y};
+		moveToTarget = fleeResults.FleeTo;
 	}
 
 	let patientHPPercent = pair.attacker.hits / pair.attacker.hitsMax;
@@ -77,10 +95,14 @@ export function developCombatPairs(state: types.State, mySpawns: prototypes.Stru
 			if (mySpawns.find(k => k.x === j.c.x && k.x === j.c.x)) {
 				return;
 			}
+			let w = 1.0;
+			let pair = pairs.get(j.c.id);
+			if (pair === undefined) {
+				w = 2.0;
+			}
 			let dist = utils.getRange(i.c, j.c);
 			let hpPercent = j.c.hits / j.c.hitsMax; 
-			let score = 1.0 / (1.0 + dist * hpPercent);
-			let pair = pairs.get(j.c.id);
+			let score = w / (1.0 + dist * dist * hpPercent);
 			if (pair === undefined && bestScore < score) {
 				bestScore = score;
 				bestPatient = j.c;
