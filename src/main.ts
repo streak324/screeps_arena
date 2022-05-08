@@ -134,12 +134,14 @@ export function loop(): void {
 			state.newCreepUnits.push({role: types.WORKER, c: creep, lastPosition: {x: 0, y: 0}});
 		}
 	} else if (numAttackerCreeps <= numHealerCreeps) {
-		let creep = mySpawn.spawnCreep([constants.MOVE, constants.ATTACK, constants.MOVE, constants.MOVE, constants.ATTACK, constants.ATTACK]).object;
+		let creep = mySpawn.spawnCreep([
+			constants.MOVE, constants.MOVE, constants.MOVE,constants.MOVE, constants.MOVE,
+			constants.ATTACK, constants.ATTACK, constants.ATTACK, constants.ATTACK, constants.ATTACK]).object;
 		if (creep !== undefined) {
 			state.newCreepUnits.push({role: types.ATTACKER, c: creep, lastPosition: {x: 0, y: 0}});
 		}
 	} else {
-		let creep = mySpawn.spawnCreep([constants.MOVE, constants.MOVE, constants.MOVE, constants.HEAL]).object;
+		let creep = mySpawn.spawnCreep([constants.MOVE, constants.MOVE, constants.HEAL, constants.HEAL]).object;
 		if (creep !== undefined) {
 			state.newCreepUnits.push({role: types.HEALER, c: creep, lastPosition: {x: 0, y: 0}});
 		}
@@ -151,7 +153,7 @@ export function loop(): void {
 
 	//clustering enemies
 	let enemyClusters = new Array<types.UnitCluster>();
-	let enemies = new Array<prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart|prototypes.StructureSpawn>(...enemySpawns, ...enemyCreeps, ...enemyRamparts, ...enemyTowers,);
+	let enemies = new Array<prototypes.Creep|prototypes.StructureTower|prototypes.StructureRampart|prototypes.StructureSpawn>(...enemyCreeps, ...enemyRamparts, ...enemyTowers,);
 	let creepViz = new visual.Visual(2, false);
 	enemies.forEach(e => {
 		clustering.putIntoCluster(e, state, creepViz, enemyClusters);

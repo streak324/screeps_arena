@@ -106,7 +106,7 @@ export function developCombatPairs(state: types.State, mySpawns: prototypes.Stru
 			let dist = utils.getRange(i.c, j.c);
 			let hpPercent = j.c.hits / j.c.hitsMax; 
 			let score = w / (1.0 + dist * dist * hpPercent);
-			if (pair === undefined && bestScore < score) {
+			if (bestScore < score) {
 				bestScore = score;
 				bestPatient = j.c;
 			}
