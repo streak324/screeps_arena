@@ -141,7 +141,9 @@ export function loop(): void {
 			state.newCreepUnits.push({role: types.ATTACKER, c: creep, lastPosition: {x: 0, y: 0}});
 		}
 	} else {
-		let creep = mySpawn.spawnCreep([constants.MOVE, constants.MOVE, constants.HEAL, constants.HEAL]).object;
+		let creep = mySpawn.spawnCreep([
+			constants.MOVE, constants.MOVE, constants.MOVE, 
+			constants.HEAL, constants.HEAL, constants.HEAL]).object;
 		if (creep !== undefined) {
 			state.newCreepUnits.push({role: types.HEALER, c: creep, lastPosition: {x: 0, y: 0}});
 		}
